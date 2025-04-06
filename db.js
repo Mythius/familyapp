@@ -11,6 +11,13 @@ const config = {
   port: 3306,
 };
 
+const ssh_config = {
+  host: "msouthwick.com",
+  user: "matthias",
+  password: "",
+  port: 22,
+}
+
 function sshQuery(host, db, query) {
   return new Promise((res, rej) => {
     var dbServer = {
@@ -21,10 +28,10 @@ function sshQuery(host, db, query) {
       database: db,
     };
     var tunnelConfig = {
-      host: config.host,
-      port: 22,
-      username: config.user,
-      password: config.password,
+      host: ssh_config.host,
+      port: ssh_config.port,
+      username: ssh_config.user,
+      password: ssh_config.password,
     };
     var forwardConfig = {
       srcHost: config.host,
@@ -271,3 +278,4 @@ exports.loadSQL = loadSQL;
 exports.saveCSV = saveCSV;
 exports.file = file;
 exports.loadCSV = loadCSV;
+exports.ssh_config = ssh_config;

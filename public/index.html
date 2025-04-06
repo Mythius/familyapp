@@ -1,38 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Website</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Family Registry</title>
 
-	<script src="api.js"></script>
-	<script src="https://accounts.google.com/gsi/client"></script>
-	<script src="jwt-decode.min.js"></script>
+    <script src="api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <script src="jwt-decode.min.js"></script>
 
-</head>
-<body>
-	<p></p>
-	<button onclick="signInButton()">Sign in</button>
-	<script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <load>
+      <img id="logo" src="logo.png" alt="" />
+      <img id="login" onclick="signin()" src="google-signin.png" alt="" />
+    </load>
 
-		const $=q=>document.querySelector(q);
+    <main>
+      <search>
+        <div class="search-container">
+          <input
+            type="text"
+            id="search"
+            placeholder="Search names..."
+            oninput="renderTable()"
+          />
+        </div>
 
-		async function main(){
-			let data = await request('/hello2');
-			$('p').innerHTML = data.message;
-		}
+        <div class="table" id="table">
+          <!-- Table rows inserted by JS -->
+        </div>
+      </search>
+      <div id="profile" class="out">
+        <h1 id="name">Matthias</h1>
+        <div id="phone"></div>
+        <div id="email"></div>
+        <div id="address"></div>
+        <div id="age"></div>
+        <div id="parents"></div>
+        <div id="spouse"></div>
+        <div id="children"></div>
+      </div>
+    </main>
 
-		async function signInButton(){
-			let data = await googleAuth();
-			let token = await data.loginSuccess;
-			await main();
-			console.log(token);
-		}
+    <footer>
+      <img onclick="gotoSearch()" id="search" src="search.png" alt="" />
+      <img src="tree.png" alt="" />
+    </footer>
 
-		// main();
-
-
-
-	</script>
-</body>
+    <script src="main.js"></script>
+  </body>
 </html>
