@@ -67,7 +67,8 @@ app.post('/auth', async (req, res) => {
         delete sessions[auth[cred.username].token];
         sessions[token] = { user: auth[cred.username] };
         sessions[token].username = cred.username;
-        auth[cred.username].token = token;
+        auth[cred.username].token = token;        
+        if(API.onlogin) API.onlogin(sessions[token]);
     } else {
         res.status(403).json({ error: 'Couldn\'t log in' });
         return;
@@ -90,6 +91,7 @@ app.post('/google-signin', async (req, res) => {
         auth[cred.email].token = token;
         saveAuth();
         res.status(200).json({message:'Successfully Logged In',token});
+        if(API.onlogin) API.onlogin(sessions[token]);
     } catch(e) {
         console.error(e);
         res.status(403).json({error:'Invalid Google Login'});
