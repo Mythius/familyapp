@@ -18,7 +18,7 @@ async function main() {
   names = data
     .filter((e, i) => i > 0)
     .map((row) => {
-      return { name: row[1] };
+      return { name: row[2] };
     });
   document.querySelector("load").classList.add("hidden");
   renderTable(names);
@@ -38,15 +38,17 @@ function gotoProfile() {
   $("#profile").classList.remove("out");
 }
 
-function handleClick(name) {
+async function handleClick(name) {
   gotoProfile();
-  let p = data.filter((e) => e[1] == name)[0];
-  $("#name").innerHTML = p[1];
-  $("#address").innerHTML = p[2];
-  $("#phone").innerHTML = p[3];
-  $("#email").innerHTML = p[4];
-  $("#age").innerHTML = p[6]
-    ? "Age: " + Math.floor((new Date() - new Date(p[6])) / 31536000000)
+  let profile = await request("/people/" + encodeURI(name));
+  let p = data.filter((e) => e[2] == name)[0];
+  $("#name").innerHTML = profile[0].name;
+  $("#address").innerHTML = profile[0].address;
+  $("#phone").innerHTML = profile[0].phone;
+  $("#email").innerHTML = profile[0].email;
+  let birth_date = profile[0].birthday;
+  $("#age").innerHTML = birth_date
+    ? "Age: " + Math.floor((new Date() - new Date(birth_date)) / 31536000000)
     : "Brirthday not found";
 }
 

@@ -1,55 +1,90 @@
-const db = require('./db.js');
-require('dotenv').config();
-const h = '127.0.0.1';
+const db = require("./db.js");
+require("dotenv").config();
+const h = "127.0.0.1";
 
 db.dbServer.host = process.env.DB;
 db.dbServer.user = process.env.USER;
 db.dbServer.password = process.env.PASS;
 db.ssh_config.password = process.env.SSH_PASS;
-db.setQueryMode('ssh');
+db.setQueryMode("ssh");
 
+exports.public = function (app) {
+  app.get("/hello", (req, res) => {
+    res.json({ message: "Hello World" });
+  });
+};
 
-exports.public = function(app){
-	app.get('/hello',(req,res)=>{
-		res.json({message:"Hello World"})
-	});
-}
+exports.private = function (app) {
+  app.get("/hello2", (req, res) => {
+    res.json({
+      message:
+        "Hello " +
+        req.session.google_data.given_name +
+        `<br><img src="${req.session.google_data.picture}">`,
+    });
+  });
 
-exports.private = function(app){
+  app.get("/people", (req, res) => {
+    let email = req.session.google_data.email;
 
-	app.get('/hello2',(req,res)=>{
-		res.json({message:"Hello "+req.session.google_data.given_name+`<br><img src="${req.session.google_data.picture}">`})
-	})
-
-  app.get('/people',(req,res)=>{
-    db.queryToCSV('127.0.0.1','family_db','select * from people').then(data=>{
+    db.queryToCSV(
+      "127.0.0.1",
+      "family_db",
+      `select * from people where family_id in (select distinct family_id from people where email = '${email}')`
+    ).then((data) => {
       res.json(data);
     });
   });
+
+  app.get("/people/:name", async (req, res) => {
+    let email = req.session.google_data.email;
+    let d = await db.query(
+      h,
+      "family_db",
+      `select * from people where name = '${decodeURI(
+        req.params.name
+      )}' and family_id in (select distinct family_id from people where email = '${email}')`
+    );
+    res.json(d);
+  });
+};
+
+async function getSecurityDetails(email) {
+  return await db.query(
+    h,
+    "family_db",
+    `select * from security where email = "${email}";`
+  );
 }
 
-async function getSecurityDetails(email){
-  return await db.query(h,'family_db',`select * from security where email = "${email}";`);
+async function addUser(email, role = "user") {
+  return await db.query(
+    h,
+    "family_db",
+    `insert into security (email,role) values ("${email}","${role}");`
+  );
 }
 
-async function addUser(email,role='user'){
-  return await db.query(h,'family_db',`insert into security (email,role) values ("${email}","${role}");`);
+async function incramentLogins(email) {
+  return await db.query(
+    h,
+    "family_db",
+    `update security set logins = logins + 1 where email = "${email}"`
+  );
 }
 
-async function incramentLogins(email){
-  return await db.query(h,'family_db',`update security set logins = logins + 1 where email = "${email}"`);
-}
+async function getProfile(name) {}
 
-exports.onlogin = async function(session){
-  if(session.google_data){
+exports.onlogin = async function (session) {
+  if (session.google_data) {
     let sd = await getSecurityDetails(session.google_data.email);
-    if(sd.length == 0){
+    if (sd.length == 0) {
       addUser(session.google_data.email);
     } else {
       incramentLogins(session.google_data.email);
     }
   }
-}
+};
 
 /* session.google_data
 
