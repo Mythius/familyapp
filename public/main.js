@@ -80,5 +80,13 @@ function renderTable() {
   });
 }
 
+window.addEventListener("popstate", function (event) {
+  // Prevent default back button behavior
+  event.preventDefault();
+
+  // Call your custom function
+  gotoSearch();
+});
+
 // main();
 skipSignin();
