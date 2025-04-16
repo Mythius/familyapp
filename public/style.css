@@ -112,8 +112,7 @@ footer {
   bottom: 0;
   background-color: #0093ff;
   display: flex;
-  gap: 25%;
-  justify-content: center;
+  justify-content: space-around;
   align-items: center;
 }
 
@@ -123,4 +122,50 @@ footer img {
 
 .out {
   display: none;
+}
+
+#profile {
+  width: 80%;
+}
+
+#profile fieldset {
+  border: 1px solid gray;
+  padding: 8px;
+  margin: 5px;
+  border-radius: 5px;
+}
+
+.main{
+  width: 80%;
+}
+
+#profile fieldset legend {
+  color: gray;
+}
+
+#calendar{
+  height: 100%;
+}
+
+#month{
+  display: grid;
+  grid-template-columns: repeat(7, calc(100% / 7));
+  border: 1px solid black;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 95%;
+}
+
+.day {
+  border: 1px solid black;
+  width: 100%;
+  /* height: 80px; */
+}
+
+#monthlabel{
+  display: inline;
+}
+
+#calendar span{
+  cursor: pointer;
 }
