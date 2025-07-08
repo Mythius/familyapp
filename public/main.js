@@ -329,8 +329,8 @@ function makeClickablePersonTag(name) {
 
 function populateCalendarMonth(m = month) {
   let birthdays_this_month = all_people
-    .filter((e) => e[7])
-    .filter((e) => new Date(e[7]).getMonth() == m);
+    .filter((e) => e[8])
+    .filter((e) => new Date(e[8]).getMonth() == m);
   let first_day_of_month = new Date();
   first_day_of_month.setMonth(m);
   first_day_of_month.setDate(1);
@@ -351,7 +351,7 @@ function populateCalendarMonth(m = month) {
       if (d > last_day_of_month.getDate()) d = -1;
       box.innerHTML += d >= 1 ? d : "";
       let bdays_today = birthdays_this_month.filter(
-        (e) => new Date(e[7]).getDate() == d
+        (e) => new Date(e[8]).getDate() == d
       );
       for (let bday of bdays_today) {
         box.innerHTML += "<hr>" + bday[2];
