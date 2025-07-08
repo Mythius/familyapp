@@ -18,10 +18,10 @@ const ssh_config = {
   port: 22,
 }
 
-function sshQuery(host, db, query, values = []) {
+function sshQuery( db, query, values = []) {
   return new Promise((res, rej) => {
     var dbServer = {
-      host: host,
+      host: `localhost`,
       port: config.port,
       user: config.user,
       password: config.password,
@@ -39,11 +39,6 @@ function sshQuery(host, db, query, values = []) {
       dstHost: dbServer.host,
       dstPort: dbServer.port,
     };
-    if (query.includes("--")) {
-      rej("SQL INJECTION, only execute 1 query at a time");
-      console.error("SQL Rejected (Detected Injection)");
-      return;
-    }
     const sshClient = new Client();
     const SSHConnection = new Promise((resolve, reject) => {
       sshClient
@@ -115,7 +110,7 @@ function parseCSVdata(data, delimiter = ",") {
   });
 }
 
-function uploadCSV(path, host, db, table, delimiter = ",") {
+function uploadCSV(path, db, table, delimiter = ",") {
   return new Promise((res, rej) => {
     file.read(path, (data) => {
       parseCSVdata(data, delimiter).then((alldata) => {
@@ -144,9 +139,9 @@ function uploadCSV(path, host, db, table, delimiter = ",") {
   });
 }
 
-function queryToCSV(host, db, query, values, filename, delimiter = ",") {
+function queryToCSV(db, query, values, filename, delimiter = ",") {
   return new Promise((res, rej) => {
-    q(host, db, query, values).then((result) => {
+    q(db, query, values).then((result) => {
       let CSV = [];
       if (!result || !result[0]) {
         res([]);
@@ -233,39 +228,8 @@ function setQueryMode(type = "normal") {
   } else if (type == "normal") {
     q = normalQuery;
     exports.query = normalQuery;
-  } else if (type == "snowflake") {
-    q = function (u1, u2, qry) {
-      return SF.query(qry);
-    };
-  } else if (type == "pg") {
-    q = postGresQuery;
   }
   exports.query = q;
-}
-
-function postGresQuery(host, db, query) {
-  return new Promise((res, rej) => {
-    const client = new pgClient({
-      user: login["elevate-username"],
-      host: login["elevate-host"],
-      database: db,
-      password: login["elevate-password"],
-      port: 3306, // Default PostgreSQL port
-    });
-    client.connect().then((_) => {
-      client.query(query, (err, result) => {
-        if (err) {
-          console.log("Error");
-          rej(err);
-          return;
-        } else {
-          console.log("success");
-          res(result.rows);
-        }
-        client.end();
-      });
-    });
-  });
 }
 
 var q = normalQuery;

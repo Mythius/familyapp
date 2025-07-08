@@ -29,7 +29,6 @@ exports.private = function (app) {
     let email = req.session.google_data.email;
 
     db.queryToCSV(
-      h,
       "family_db",
       "select * from people where family_id in (select distinct family_id from people where email = ?)",
       [email]
@@ -41,7 +40,6 @@ exports.private = function (app) {
   app.get("/people/:name", async (req, res) => {
     let email = req.session.google_data.email;
     let d = await db.query(
-      h,
       "family_db",
       `select * from people where name = ? and family_id in (select distinct family_id from people where email = ?)`,
       [decodeURI(req.params.name), email]
@@ -78,7 +76,7 @@ exports.private = function (app) {
     updateValues.push(name, email);
 
     try {
-      await db.query(h, "family_db", sql, updateValues);
+      await db.query("family_db", sql, updateValues);
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -95,7 +93,6 @@ exports.private = function (app) {
 
     // Get family_id for the current user
     let families = await db.query(
-      h,
       "family_db",
       `SELECT DISTINCT family_id FROM people WHERE email = ?`,
       [email]
@@ -118,7 +115,7 @@ exports.private = function (app) {
   `;
 
     try {
-      await db.query(h, "family_db", sql, values);
+      await db.query( "family_db", sql, values);
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -134,7 +131,6 @@ exports.private = function (app) {
 
 async function getSecurityDetails(email) {
   return await db.query(
-    h,
     "family_db",
     `select * from security where email = ?;`,
     [email]
@@ -143,7 +139,6 @@ async function getSecurityDetails(email) {
 
 async function addUser(email, role = "user") {
   return await db.query(
-    h,
     "family_db",
     `insert into security (email,role) values (?,?);`,
     [email, role]
@@ -152,7 +147,6 @@ async function addUser(email, role = "user") {
 
 async function incramentLogins(email) {
   return await db.query(
-    h,
     "family_db",
     `update security set logins = logins + 1 where email = ?`,
     [email]
