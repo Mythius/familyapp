@@ -1,4 +1,5 @@
 const db = require("./db.js");
+require("dotenv").config();
 const h = "127.0.0.1";
 
 db.dbServer.host = process.env.DB;
