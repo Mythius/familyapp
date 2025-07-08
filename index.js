@@ -1,3 +1,4 @@
+require("dotenv").config();
 const port = process.env.PORT || 80;
 const google_client_id = '1016767921529-7km6ac8h3cud3256dqjqha6neiufn2om.apps.googleusercontent.com';
 // npm i express path fs md5 body-parser express-fileupload google-auth-library
