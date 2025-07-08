@@ -188,13 +188,13 @@ button {
   background-color: #f0f8ff;
   border-radius: 15px;
   margin-right: 5px;
+  margin-top: 3px;
   cursor: pointer;
   border: #0093ff 1px solid;
 }
 
 .person-tag:hover {
   background-color: #e0f0ff;
-  margin-top: 3px;
 }
 
 .hidden {
