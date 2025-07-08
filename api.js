@@ -29,9 +29,10 @@ exports.private = function (app) {
     let email = req.session.google_data.email;
 
     db.queryToCSV(
-      "127.0.0.1",
+      h,
       "family_db",
-      `select * from people where family_id in (select distinct family_id from people where email = '${email}')`
+      "select * from people where family_id in (select distinct family_id from people where email = ?)",
+      [email]
     ).then((data) => {
       res.json(data);
     });
@@ -42,9 +43,8 @@ exports.private = function (app) {
     let d = await db.query(
       h,
       "family_db",
-      `select * from people where name = '${decodeURI(
-        req.params.name
-      )}' and family_id in (select distinct family_id from people where email = '${email}')`
+      `select * from people where name = ? and family_id in (select distinct family_id from people where email = ?)`,
+      [decodeURI(req.params.name), email]
     );
     res.json(d);
   });
@@ -57,23 +57,28 @@ exports.private = function (app) {
     if (req.session.sd.role != "admin") {
       return res.status(403).json({ error: "Access Denied" });
     }
-
-    // Build SET clause dynamically from body
-    let updates = Object.entries(body).filter(e=>e.value!='')
-      .map(([key, value]) => `${key} = '${value}'`)
-      .join(", ");
+    // Build SET clause dynamically from body, trimming values
+    const entries = Object.entries(body)
+      .filter(([_, value]) => value !== '' && value !== undefined)
+      .map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]);
+    if (!entries.length) {
+      return res.status(400).json({ error: "No fields to update." });
+    }
+    const updates = entries.map(([key]) => `${key} = ?`).join(", ");
+    const updateValues = entries.map(([_, value]) => value);
 
     let sql = `
-    UPDATE people
-    SET ${updates}
-    WHERE name = '${name}'
+      UPDATE people
+      SET ${updates}
+      WHERE name = ?
       AND family_id IN (
-        SELECT DISTINCT family_id FROM people WHERE email = '${email}'
+        SELECT DISTINCT family_id FROM people WHERE email = ?
       )
-  `;
+    `;
+    updateValues.push(name, email);
 
     try {
-      await db.query(h, "family_db", sql);
+      await db.query(h, "family_db", sql, updateValues);
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -92,7 +97,8 @@ exports.private = function (app) {
     let families = await db.query(
       h,
       "family_db",
-      `SELECT DISTINCT family_id FROM people WHERE email = '${email}'`
+      `SELECT DISTINCT family_id FROM people WHERE email = ?`,
+      [email]
     );
 
     if (!families.length) {
@@ -130,7 +136,8 @@ async function getSecurityDetails(email) {
   return await db.query(
     h,
     "family_db",
-    `select * from security where email = "${email}";`
+    `select * from security where email = ?;`,
+    [email]
   );
 }
 
@@ -138,7 +145,8 @@ async function addUser(email, role = "user") {
   return await db.query(
     h,
     "family_db",
-    `insert into security (email,role) values ("${email}","${role}");`
+    `insert into security (email,role) values (?,?);`,
+    [email, role]
   );
 }
 
@@ -146,7 +154,8 @@ async function incramentLogins(email) {
   return await db.query(
     h,
     "family_db",
-    `update security set logins = logins + 1 where email = "${email}"`
+    `update security set logins = logins + 1 where email = ?`,
+    [email]
   );
 }
 

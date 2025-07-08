@@ -18,7 +18,7 @@ const ssh_config = {
   port: 22,
 }
 
-function sshQuery(host, db, query) {
+function sshQuery(host, db, query, values = []) {
   return new Promise((res, rej) => {
     var dbServer = {
       host: host,
@@ -70,10 +70,12 @@ function sshQuery(host, db, query) {
           );
         })
         .connect(tunnelConfig);
+
+        
     });
     SSHConnection.then((connection) => {
       // console.log(connection);
-      connection.query(query, function (err, results, fields) {
+      connection.query(query, values, function (err, results, fields) {
         if (err) {
           console.log(err);
         } else {
@@ -142,9 +144,9 @@ function uploadCSV(path, host, db, table, delimiter = ",") {
   });
 }
 
-function queryToCSV(host, db, query, filename, delimiter = ",") {
+function queryToCSV(host, db, query, values, filename, delimiter = ",") {
   return new Promise((res, rej) => {
-    q(host, db, query).then((result) => {
+    q(host, db, query, values).then((result) => {
       let CSV = [];
       if (!result || !result[0]) {
         res([]);
@@ -201,7 +203,7 @@ function loadSQL(filename) {
   });
 }
 
-function normalQuery(host, db, query) {
+function normalQuery(db, query, values = []) {
   return new Promise((res, rej) => {
     const connection = mysql.createConnection({
       ...config,
@@ -212,14 +214,13 @@ function normalQuery(host, db, query) {
         rej(err);
         return;
       }
-      connection.query(query, function (err, results, fields) {
+      connection.query(query, values, function (err, results, fields) {
         if (err) {
-          // console.log(err);
           rej(err);
         } else {
           res(results);
-          connection.end();
         }
+        connection.end();
       });
     });
   });
