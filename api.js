@@ -40,36 +40,44 @@ exports.private = function (app) {
     let email = req.session.google_data.email;
     let d = await db.query(
       "family_db",
-      `select p1.*,
-        p2.name father_name,
-        p2.ID father_id,
-        p3.name mother_name,
-        p3.ID mother_id,
-        s.names spouse_names,
-        s.IDs spouse_ids,
-        c.names children_names,
-        c.IDs children_ids
-      from people p1 
-      left join people p2 on p1.father_id = p2.ID
-      left join people p3 on p1.mother_id = p3.ID
-      left join (
-        select
+      `SELECT 
+        p1.*,
+        p2.name AS father_name,
+        p2.ID AS father_id,
+        p3.name AS mother_name,
+        p3.ID AS mother_id,
+        s.names AS spouse_names,
+        s.IDs AS spouse_ids,
+        c.names AS children_names,
+        c.IDs AS children_ids
+      FROM people p1
+      LEFT JOIN people p2 ON p1.father_id = p2.ID
+      LEFT JOIN people p3 ON p1.mother_id = p3.ID
+      LEFT JOIN (
+        SELECT 
+          spouse_link.person_id,
+          GROUP_CONCAT(DISTINCT p.name ORDER BY p.marriage_date ASC) AS names,
+          GROUP_CONCAT(DISTINCT p.ID ORDER BY p.marriage_date ASC) AS IDs
+        FROM (
+          SELECT ID AS person_id, spouse_id FROM people WHERE spouse_id IS NOT NULL
+          UNION
+          SELECT spouse_id AS person_id, ID AS spouse_id FROM people WHERE spouse_id IS NOT NULL
+        ) spouse_link
+        JOIN people p ON p.ID = spouse_link.spouse_id
+        GROUP BY spouse_link.person_id
+      ) s ON s.person_id = p1.ID
+      LEFT JOIN (
+        SELECT
           father_id, mother_id,
-          group_concat(people.name order by people.birthday asc) names,
-          group_concat(people.ID order by people.birthday asc) IDs
-        from people 
-          group by father_id, mother_id
-      ) c on (c.father_id = p1.ID or c.mother_id = p1.ID)
-      left join (
-        select
-          spouse_id,
-          group_concat(people.name order by people.marriage_date asc) names,
-          group_concat(people.ID order by people.marriage_date asc) IDs
-        from people 
-          group by spouse_id
-      ) s on (s.spouse_id = p1.Id)
-      where p1.name = ?
-      and p1.family_id in (select distinct family_id from people where email = ?)`,
+          GROUP_CONCAT(p.name ORDER BY p.birthday ASC) AS names,
+          GROUP_CONCAT(p.ID ORDER BY p.birthday ASC) AS IDs
+        FROM people p
+        GROUP BY father_id, mother_id
+      ) c ON (c.father_id = p1.ID OR c.mother_id = p1.ID)
+      WHERE p1.name = ?
+      AND p1.family_id IN (SELECT DISTINCT family_id from people where email = ?)
+      GROUP BY p1.ID
+      `,
       [decodeURI(req.params.name), email]
     );
     res.json(d);
@@ -175,8 +183,9 @@ exports.private = function (app) {
   });
 
   app.post("/people", async (req, res) => {
-    let body = req.session.body;
+    let body = req.body;
     let email = req.session.google_data.email;
+    
 
     if (req.session.sd.role != "admin") {
       return res.status(403).json({ error: "Access Denied" });
