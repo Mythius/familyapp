@@ -194,6 +194,7 @@ button {
 
 .person-tag:hover {
   background-color: #e0f0ff;
+  margin-top: 3px;
 }
 
 .hidden {
