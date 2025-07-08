@@ -24,7 +24,7 @@
       <div class="search-container">
         <input type="text" id="search" placeholder="Search names..." oninput="renderTable()" />
       </div>
-
+      <button id="create-person" class="hidden">Add New Person</button>
       <div class="table" id="table">
         <!-- Table rows inserted by JS -->
       </div>
@@ -84,6 +84,15 @@
     </div>
 
     <div id="person_select_modal" class="hidden"></div>
+    <div id="add_person" class="hidden">
+      <h1>Add Person</h1>
+      <fieldset>
+        <legend>Name</legend>
+        <input type="text" id="name-input" />
+        <button id="new-person-submit">Submit</button>
+        <button id="new-person-cancel">Cancel</button>
+      </fieldset>
+    </div>
   </main>
 
   <footer>

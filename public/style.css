@@ -201,7 +201,8 @@ button {
   display: none !important;
 }
 
-#person_select_modal {
+#person_select_modal,
+#add_person {
   width: 60%;
   display: flex;
   justify-content: center;

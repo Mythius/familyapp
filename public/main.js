@@ -402,7 +402,43 @@ function renderTable() {
     row.onclick = () => handleClick(item.name);
     table.appendChild(row);
   });
+
+  if(filteredData.length === 0) {
+    $("#create-person").classList.remove("hidden");
+  } else {
+    $("#create-person").classList.add("hidden");
+  }
 }
+
+$("#create-person").onclick = async () => {
+  let modal = $("#add_person");
+  modal.classList.remove("hidden");
+  $("#name-input").value = $("#search").value.trim();
+  $("#new-person-submit").onclick = async () => {
+    let nameInput = $("#name-input").value.trim();
+    if (!nameInput) {
+      alert("Name cannot be empty");
+      return;
+    }
+    // Check if name already exists
+    if (names.some((p) => p.name.toLowerCase() === nameInput.toLowerCase())) {
+      alert("Person with this name already exists.");
+      return;
+    }
+    // Create new person
+    await request("/people", {
+      method: "POST",
+      body: JSON.stringify({ name: nameInput }),
+    });
+    modal.classList.add("hidden");
+    main(); // Refresh the table
+  }
+  $("#new-person-cancel").onclick = () => {
+    modal.classList.add("hidden");
+    nameInput.value = "";
+  }
+}
+
 
 window.addEventListener("popstate", function (event) {
   // Prevent default back button behavior
