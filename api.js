@@ -6,7 +6,7 @@ db.dbServer.host = process.env.DB;
 db.dbServer.user = process.env.USER;
 db.dbServer.password = process.env.PASS;
 db.ssh_config.password = process.env.SSH_PASS;
-db.setQueryMode("ssh");
+db.setQueryMode(process.env.DB_TYPE || "ssh");
 
 exports.public = function (app) {
   app.get("/hello", (req, res) => {
