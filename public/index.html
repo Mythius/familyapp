@@ -32,6 +32,10 @@
     <div id="profile" class="main out">
       <h1 id="name">Matthias</h1>
       <fieldset>
+        <legend>Gender</legend>
+        <div id="gender"></div>
+      </fieldset>
+      <fieldset>
         <legend>Phone</legend>
         <div id="phone"></div>
       </fieldset>
@@ -69,6 +73,7 @@
       </fieldset>
       <button id="edit-btn" style="display: none;">Edit</button>
       <button id="submit-btn" style="display: none;">Submit</button>
+      <button id="cancel-btn" style="display: none;">Cancel</button>
     </div>
 
     <div id="calendar" class="main out">
@@ -77,6 +82,8 @@
       <span onclick="nextMonth()">▶</span>
       <div id="month"></div>
     </div>
+
+    <div id="person_select_modal" class="hidden"></div>
   </main>
 
   <footer>

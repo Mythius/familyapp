@@ -126,6 +126,7 @@ footer img {
 
 #profile {
   width: 80%;
+  overflow-y: auto;
 }
 
 #profile fieldset {
@@ -135,7 +136,7 @@ footer img {
   border-radius: 5px;
 }
 
-.main{
+.main {
   width: 80%;
 }
 
@@ -143,11 +144,11 @@ footer img {
   color: gray;
 }
 
-#calendar{
+#calendar {
   height: 100%;
 }
 
-#month{
+#month {
   display: grid;
   grid-template-columns: repeat(7, calc(100% / 7));
   border: 1px solid black;
@@ -162,15 +163,15 @@ footer img {
   /* height: 80px; */
 }
 
-#monthlabel{
+#monthlabel {
   display: inline;
 }
 
-#calendar span{
+#calendar span {
   cursor: pointer;
 }
 
-button{
+button {
   background-color: #0093ff;
   color: white;
   border: none;
@@ -179,4 +180,44 @@ button{
   cursor: pointer;
   margin: 5px;
   margin-top: 10px;
+}
+
+.person-tag {
+  display: inline-block;
+  padding: 5px 10px;
+  background-color: #f0f8ff;
+  border-radius: 15px;
+  margin-right: 5px;
+  cursor: pointer;
+  border: #0093ff 1px solid;
+}
+
+.person-tag:hover {
+  background-color: #e0f0ff;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#person_select_modal {
+  width: 60%;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  border: 3px solid black;
+  align-items: center;
+  left: 50%;
+  position: fixed;
+  top: 50%;
+  background-color: white;
+  border-radius: 50px;
+  box-sizing: border-box;
+  padding: 20px;
+  gap: 20px;
+  transform: translate(-50%, -50%);
+  box-shadow: black 10px 10px 20px;
+  z-index: 100;
+  max-height: 80%;
+  overflow-y: auto;
 }

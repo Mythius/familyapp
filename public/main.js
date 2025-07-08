@@ -16,8 +16,8 @@ async function skipSignin() {
 
 async function main() {
   permissions = await request("/permissions");
-  data = await request("/people");
-  names = data
+  all_people = await request("/people");
+  names = all_people
     .filter((e, i) => i > 0)
     .map((row) => {
       return { name: row[2] };
@@ -26,7 +26,7 @@ async function main() {
   renderTable(names);
 }
 
-let names, data;
+let names, all_people;
 
 function hideAll() {
   let elements = document.querySelectorAll(".main");
@@ -56,17 +56,19 @@ function gotoCalendar() {
 async function handleClick(name) {
   let submitBtn = $("#submit-btn");
   let editBtn = $("#edit-btn");
-  submitBtn.style.display = 'none';
-  editBtn.style.display = 'none';
-  let profile = await request("/people/" + encodeURI(name));
+  let cancelBtn = $("#cancel-btn");
+  submitBtn.style.display = "none";
+  editBtn.style.display = "none";
+  cancelBtn.style.display = "none";
+  let profile_list = await request("/people/" + encodeURI(name));
+  let profile = profile_list[0];
   gotoProfile();
-  let p = data.filter((e) => e[2] == name)[0];
-  $("#name").innerHTML = profile[0].name;
-  $("#address").innerHTML = profile[0].address;
-  $("#phone").innerHTML = profile[0].phone;
-  $("#email").innerHTML = profile[0].email;
-  let birth_date = profile[0].birthday;
-  $("#bday").innerHTML = new Date(profile[0].birthday).toLocaleDateString(
+  $("#name").innerHTML = profile.name;
+  $("#address").innerHTML = profile.address;
+  $("#phone").innerHTML = profile.phone;
+  $("#email").innerHTML = profile.email;
+  let birth_date = profile.birthday;
+  $("#bday").innerHTML = new Date(profile.birthday).toLocaleDateString(
     "en-us",
     {
       year: "numeric",
@@ -81,25 +83,63 @@ async function handleClick(name) {
   $("#dday").innerHTML =
     profile.death_date == null
       ? ""
-      : new Date(profile[0].death_date).toLocaleDateString("en-us", {
+      : new Date(profile.death_date).toLocaleDateString("en-us", {
           year: "numeric",
           month: "long",
           day: "numeric",
         });
+  let parents = $("#parents");
+  parents.innerHTML = "";
+  if (profile.father_name) {
+    parents.appendChild(makeClickablePersonTag(profile.father_name));
+  }
+  if (profile.mother_name) {
+    parents.appendChild(makeClickablePersonTag(profile.mother_name));
+  }
+  let children = $("#children");
+  children.innerHTML = "";
+  if (profile.children_names != null && profile.children_names != "") {
+    for (let name of profile.children_names.split(",")) {
+      children.appendChild(makeClickablePersonTag(name));
+    }
+  }
+  let spouse = $("#spouse");
+  spouse.innerHTML = "";
+  if (profile.spouse_names != null && profile.spouse_names != "") {
+    for (let name of profile.spouse_names.split(",")) {
+      spouse.appendChild(makeClickablePersonTag(name));
+    }
+  }
 
+  addEditButton(profile);
+}
+
+function addEditButton(profile) {
   if (permissions && permissions.role === "admin") {
-    // Add Edit button
+    let submitBtn = $("#submit-btn");
+    let editBtn = $("#edit-btn");
+    let cancelBtn = $("#cancel-btn");
+
+    
+    let genderField = $("#gender");
+    if (profile.gender == null || profile.gender === "") {
+      genderField.innerHTML = "Not selected";
+    } else {
+      genderField.innerHTML = profile.gender === "Male" ? "Male" : "Female";
+    }
+
     editBtn.style.display = "inherit";
 
     editBtn.onclick = function () {
       // Replace fields with input elements (except age)
       const fields = [
-        { id: "name", value: profile[0].name },
-        { id: "address", value: profile[0].address },
-        { id: "phone", value: profile[0].phone },
-        { id: "email", value: profile[0].email },
-        { id: "bday", value: profile[0].birthday },
-        { id: "dday", value: profile[0].death_date || "" },
+        { id: "name", value: profile.name },
+        { id: "address", value: profile.address },
+        { id: "phone", value: profile.phone },
+        { id: "email", value: profile.email },
+        { id: "bday", value: profile.birthday },
+        { id: "dday", value: profile.death_date || "" },
+        { id: "gender", value: profile.gender || "" },
       ];
       fields.forEach((f) => {
         let el = $("#" + f.id);
@@ -107,7 +147,6 @@ async function handleClick(name) {
         input.type = f.id === "bday" || f.id === "dday" ? "date" : "text";
         // Set value for date inputs in yyyy-mm-dd format
         if ((f.id === "bday" || f.id === "dday") && f.value) {
-          // Ensure only yyyy-mm-dd part is used
           input.value = f.value.slice(0, 10);
         } else {
           input.value = f.value || "";
@@ -117,8 +156,88 @@ async function handleClick(name) {
         el.appendChild(input);
       });
 
+      // Editable person-tag lists for parents, children, spouse
+      const relFields = [
+        {
+          id: "parents",
+          names: [profile.father_name, profile.mother_name].filter(Boolean),
+          key: "parents",
+        },
+        {
+          id: "children",
+          names: (profile.children_names || "")
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          key: "children",
+        },
+        {
+          id: "spouse",
+          names: (profile.spouse_names || "")
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          key: "spouse",
+        },
+      ];
+
+      relFields.forEach((rel) => {
+        const container = $("#" + rel.id);
+        container.innerHTML = "";
+
+        // Helper to render tags
+        function renderTags(names) {
+          container.innerHTML = "";
+          names.forEach((name, idx) => {
+            let tag = document.createElement("span");
+            tag.classList.add("person-tag", "editable-tag");
+            tag.innerHTML =
+              name +
+              ' <span class="remove-tag" style="color:red;cursor:pointer;">&times;</span>';
+            tag.querySelector(".remove-tag").onclick = (e) => {
+              e.stopPropagation();
+              names.splice(idx, 1);
+              renderTags(names);
+            };
+            container.appendChild(tag);
+          });
+          addPlusButton();
+        }
+
+        // Initial render
+        renderTags(rel.names);
+
+        // Add "+" button
+        function addPlusButton() {
+          let addBtn = document.createElement("button");
+          addBtn.type = "button";
+          addBtn.textContent = "+";
+          addBtn.className = "add-person-btn";
+          addBtn.onclick = async () => {
+            let personName = await personSelectModal();
+            if (!personName) return;
+            // Only add if exists in names list and not already present
+            if (
+              names.some((n) => n.name === personName) &&
+              !rel.names.includes(personName)
+            ) {
+              rel.names.push(personName);
+              renderTags(rel.names);
+            } else {
+              alert("Person not found or already added.");
+            }
+          };
+          container.appendChild(addBtn);
+        }
+
+        // Store back for submit
+        rel.getNames = () => rel.names.slice();
+      });
+
       // Show submit button
       submitBtn.style.display = "inherit";
+      cancelBtn.style.display = "inherit";
+      editBtn.style.display = "none";
 
       submitBtn.onclick = async function () {
         // Gather updated values
@@ -129,9 +248,22 @@ async function handleClick(name) {
           email: $("#email-input").value,
           birthday: $("#bday-input").value,
           death_date: $("#dday-input").value,
+          gender: (() => {
+            const genderInput = $("#gender-input");
+            if (!genderInput || !genderInput.value || genderInput.value === "Not selected") {
+              return "";
+            }
+            const val = genderInput.value.toLowerCase();
+            return val.includes("f") ? "Female" : "Male";
+          })(),
+          // Relationships
+          father_name: relFields[0].getNames()[0] || "",
+          mother_name: relFields[0].getNames()[1] || "",
+          // children_names: relFields[1].getNames().join(","),
+          spouse_names: relFields[2].getNames().join(","),
         };
         // POST updated data
-        await request(`/people/${encodeURIComponent(profile[0].name)}`, {
+        await request(`/people/${encodeURIComponent(profile.name)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(updated),
@@ -139,14 +271,64 @@ async function handleClick(name) {
         // Optionally, reload profile
         handleClick(updated.name);
       };
-      // Hide edit button after entering edit mode
-      editBtn.style.display = "none";
+
+      cancelBtn.onclick = function () {
+        handleClick(profile.name); // Reload profile without changes
+      };
     };
   }
 }
 
+function personSelectModal() {
+  return new Promise((resolve, reject) => {
+    let modal = $("#person_select_modal");
+    if (!personSelectModal.loaded) {
+      personSelectModal.loaded = true;
+      modal.innerHTML = `
+      <div class="modal-content">
+        <h2>Select a Person</h2>
+        <input type="text" id="person_search" placeholder="Search by name..." />
+        <div id="person_list"></div>
+        <button id="close_modal">Close</button>
+      </div>
+    `;
+    }
+
+    modal.classList.remove("hidden");
+    $("#close_modal").onclick = () => {
+      modal.classList.add("hidden");
+      resolve();
+    };
+    $("#person_search").oninput = () => {
+      let searchTerm = $("#person_search").value.toLowerCase();
+      let personList = $("#person_list");
+      personList.innerHTML = "";
+      if (searchTerm < 1) return;
+      names
+        .filter((p) => p.name.toLowerCase().includes(searchTerm))
+        .forEach((p) => {
+          let tag = makeClickablePersonTag(p.name);
+          tag.onclick = () => {
+            resolve(p.name);
+            modal.classList.add("hidden");
+          };
+          personList.appendChild(tag);
+        });
+    };
+    $("#person_search").oninput();
+  });
+}
+
+function makeClickablePersonTag(name) {
+  let tag = document.createElement("span");
+  tag.classList.add("person-tag");
+  tag.innerHTML = name;
+  tag.onclick = () => handleClick(name);
+  return tag;
+}
+
 function populateCalendarMonth(m = month) {
-  let birthdays_this_month = data
+  let birthdays_this_month = all_people
     .filter((e) => e[7])
     .filter((e) => new Date(e[7]).getMonth() == m);
   let first_day_of_month = new Date();
