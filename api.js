@@ -3,10 +3,14 @@ require("dotenv").config();
 const h = "127.0.0.1";
 
 db.dbServer.host = process.env.DB;
-db.dbServer.user = process.env.USER;
-db.dbServer.password = process.env.PASS;
+db.dbServer.user = process.env.DB_USER;
+db.dbServer.password = process.env.DB_PASS;
 db.ssh_config.password = process.env.SSH_PASS;
 db.setQueryMode(process.env.DB_TYPE || "ssh");
+
+console.log(db);
+console.log(process.env.USER);
+
 
 exports.public = function (app) {
   app.get("/hello", (req, res) => {
