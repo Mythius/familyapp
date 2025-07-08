@@ -12,5 +12,16 @@
     "mysql2": "^3.14.0",
     "path": "^0.12.7",
     "ssh2": "^1.16.0"
-  }
+  },
+  "name": "familyapp",
+  "version": "1.0.0",
+  "description": "Express Boilerplate witth authentication for apis",
+  "main": "index.js",
+  "devDependencies": {},
+  "scripts": {
+    "start": "node ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

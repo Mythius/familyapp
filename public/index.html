@@ -1,66 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Family Registry</title>
 
-    <script src="api.js"></script>
-    <script src="https://accounts.google.com/gsi/client"></script>
-    <script src="jwt-decode.min.js"></script>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Family Registry</title>
 
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <load>
-      <img id="logo" src="logo.png" alt="" />
-      <img id="login" onclick="signin()" src="google-signin.png" alt="" />
-    </load>
+  <script src="api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
+  <script src="jwt-decode.min.js"></script>
 
-    <main>
-      <search class="main">
-        <div class="search-container">
-          <input
-            type="text"
-            id="search"
-            placeholder="Search names..."
-            oninput="renderTable()"
-          />
-        </div>
+  <link rel="stylesheet" href="style.css" />
+</head>
 
-        <div class="table" id="table">
-          <!-- Table rows inserted by JS -->
-        </div>
-      </search>
-      <div id="profile" class="main out">
-        <h1 id="name">Matthias</h1>
-        <fieldset><legend>Phone</legend><div id="phone"></div></fieldset>
-        <fieldset><legend>Email</legend><div id="email"></div></fieldset>
-        <fieldset><legend>Address</legend><div id="address"></div></fieldset>
-        <fieldset><legend>Age</legend><div id="age"></div></fieldset>
-        <fieldset><legend>Birthday</legend><div id="bday"></div></fieldset>
-        <fieldset><legend>Death Date</legend><div id="dday"></div></fieldset>
-        <fieldset><legend>Parents</legend><div id="parents"></div></fieldset>
-        <fieldset><legend>Spouse</legend><div id="spouse"></div></fieldset>
-        <fieldset><legend>Children</legend><div id="children"></div></fieldset>
+<body>
+  <load>
+    <img id="logo" src="logo.png" alt="" />
+    <img id="login" onclick="signin()" src="google-signin.png" alt="" />
+  </load>
+
+  <main>
+    <search class="main">
+      <div class="search-container">
+        <input type="text" id="search" placeholder="Search names..." oninput="renderTable()" />
       </div>
 
-      <div id="calendar" class="main out">
-        <span onclick="prevMonth()">◀</span>
-        <h3 id="monthlabel"></h3>
-        <span onclick="nextMonth()">▶</span>
-        <div id="month"></div>
+      <div class="table" id="table">
+        <!-- Table rows inserted by JS -->
       </div>
-    </main>
+    </search>
+    <div id="profile" class="main out">
+      <h1 id="name">Matthias</h1>
+      <fieldset>
+        <legend>Phone</legend>
+        <div id="phone"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Email</legend>
+        <div id="email"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Address</legend>
+        <div id="address"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Age</legend>
+        <div id="age"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Birthday</legend>
+        <div id="bday"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Death Date</legend>
+        <div id="dday"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Parents</legend>
+        <div id="parents"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Spouse</legend>
+        <div id="spouse"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Children</legend>
+        <div id="children"></div>
+      </fieldset>
+      <button id="edit-btn" style="display: none;">Edit</button>
+      <button id="submit-btn" style="display: none;">Submit</button>
+    </div>
 
-    <footer>
-      <img onclick="gotoSearch()" id="search" src="search.png" alt="" />
-      <img src="tree.png" alt="" />
-      <img onclick="gotoCalendar()" id="calendar-icon" src="calendar.png" alt="" />
-      <img src="filter.png" alt="" />
-      <img src="settings.png" alt="" />
-    </footer>
+    <div id="calendar" class="main out">
+      <span onclick="prevMonth()">◀</span>
+      <h3 id="monthlabel"></h3>
+      <span onclick="nextMonth()">▶</span>
+      <div id="month"></div>
+    </div>
+  </main>
 
-    <script src="main.js"></script>
-  </body>
+  <footer>
+    <img onclick="gotoSearch()" id="search" src="search.png" alt="" />
+    <img src="tree.png" alt="" />
+    <img onclick="gotoCalendar()" id="calendar-icon" src="calendar.png" alt="" />
+    <img src="filter.png" alt="" />
+    <img src="settings.png" alt="" />
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+
 </html>

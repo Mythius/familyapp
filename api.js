@@ -47,6 +47,82 @@ exports.private = function (app) {
     );
     res.json(d);
   });
+
+  app.post("/people/:name", async (req, res) => {
+    let body = req.body;
+    let email = req.session.google_data.email;
+    let name = decodeURI(req.params.name);
+
+    if (req.session.sd.role != "admin") {
+      return res.status(403).json({ error: "Access Denied" });
+    }
+
+    // Build SET clause dynamically from body
+    let updates = Object.entries(body).filter(e=>e.value!='')
+      .map(([key, value]) => `${key} = '${value}'`)
+      .join(", ");
+
+    let sql = `
+    UPDATE people
+    SET ${updates}
+    WHERE name = '${name}'
+      AND family_id IN (
+        SELECT DISTINCT family_id FROM people WHERE email = '${email}'
+      )
+  `;
+
+    try {
+      await db.query(h, "family_db", sql);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/people", async (req, res) => {
+    let body = req.session.body;
+    let email = req.session.google_data.email;
+
+    if (req.session.sd.role != "admin") {
+      return res.status(403).json({ error: "Access Denied" });
+    }
+
+    // Get family_id for the current user
+    let families = await db.query(
+      h,
+      "family_db",
+      `SELECT DISTINCT family_id FROM people WHERE email = '${email}'`
+    );
+
+    if (!families.length) {
+      return res.status(400).json({ error: "No family found for user." });
+    }
+
+    let family_id = families[0].family_id;
+
+    // Build columns and values for insert
+    let columns = Object.keys(body).concat("family_id");
+    let values = Object.values(body).concat(family_id);
+    let placeholders = columns.map(() => "?").join(", ");
+
+    let sql = `
+    INSERT INTO people (${columns.join(", ")})
+    VALUES (${placeholders})
+  `;
+
+    try {
+      await db.query(h, "family_db", sql, values);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/permissions", async (req, res) => {
+    if(req.session.sd) return res.json(req.session.sd);
+    let sd = await getSecurityDetails(req.session.google_data.email);
+    res.json(sd[0]);
+  });
 };
 
 async function getSecurityDetails(email) {
@@ -79,10 +155,12 @@ exports.onlogin = async function (session) {
   if (session.google_data) {
     let sd = await getSecurityDetails(session.google_data.email);
     if (sd.length == 0) {
-      addUser(session.google_data.email);
+      await addUser(session.google_data.email);
+      sd = await getSecurityDetails(session.google_data.email);
     } else {
       incramentLogins(session.google_data.email);
     }
+    session.sd = sd[0];
   }
 };
 
