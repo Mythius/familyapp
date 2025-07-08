@@ -354,7 +354,7 @@ function populateCalendarMonth(m = month) {
         (e) => new Date(e[8]).getDate() == d
       );
       for (let bday of bdays_today) {
-        box.innerHTML += "<hr>" + bday[2];
+        box.appendChild(makeClickablePersonTag(bday[2]));
       }
       $("#month").appendChild(box);
     }
