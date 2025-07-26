@@ -24,14 +24,14 @@ exports.private = function (app) {
     });
   });
 
-  app.get("/people", (req, res) => {
+  app.get("/people", async (req, res) => {
     let email = req.session.google_data.email;
 
-    db.queryToCSV(
-      "family_db",
-      "select * from people where family_id in (select distinct family_id from people where email = ?)",
-      [email]
-    ).then((data) => {
+    await loadFamilyIds(req.session);
+
+    db.queryToCSV("family_db", "select * from people where family_id in (?)", [
+      req.session.family_ids,
+    ]).then((data) => {
       res.json(data);
     });
   });
@@ -75,10 +75,10 @@ exports.private = function (app) {
         GROUP BY father_id, mother_id
       ) c ON (c.father_id = p1.ID OR c.mother_id = p1.ID)
       WHERE p1.name = ?
-      AND p1.family_id IN (SELECT DISTINCT family_id from people where email = ?)
+      AND p1.family_id IN (?)
       GROUP BY p1.ID
       `,
-      [decodeURI(req.params.name), email]
+      [decodeURI(req.params.name), req.session.family_ids]
     );
     res.json(d);
   });
@@ -92,6 +92,8 @@ exports.private = function (app) {
       return res.status(403).json({ error: "Access Denied" });
     }
 
+    let family_ids = req.session.family_ids;
+
     // Handle relationship fields
     const relationshipFields = [
       "father_name",
@@ -104,8 +106,8 @@ exports.private = function (app) {
         if (key === "father_name") {
           db.query(
             "family_db",
-            `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (SELECT DISTINCT family_id FROM people WHERE email = ?)) WHERE name = ? AND family_id IN (SELECT DISTINCT family_id FROM people WHERE email = ?)`,
-            [body.father_name, email, name, email]
+            `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
+            [body.father_name, family_ids, name, family_ids]
           ).catch((err) => {
             console.error("Error updating father_id:", err);
           });
@@ -113,34 +115,40 @@ exports.private = function (app) {
         if (key === "mother_name") {
           db.query(
             "family_db",
-            `UPDATE people SET mother_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (SELECT DISTINCT family_id FROM people WHERE email = ?)) WHERE name = ? AND family_id IN (SELECT DISTINCT family_id FROM people WHERE email = ?)`,
-            [body.mother_name, email, name, email]
+            `UPDATE people SET mother_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
+            [body.mother_name, family_ids, name, family_ids]
           ).catch((err) => {
             console.error("Error updating father_id:", err);
           });
         }
-        if(key == "spouse_names") {
-          let spouseNames = body.spouse_names.split(",").map(s => s.trim());
+        if (key == "spouse_names") {
+          let spouseNames = body.spouse_names.split(",").map((s) => s.trim());
           for (const spouseName of spouseNames) {
-            await db.query(
-              "family_db",
-              `UPDATE people SET spouse_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (SELECT DISTINCT family_id FROM people WHERE email = ?)) WHERE name = ? AND family_id IN (SELECT DISTINCT family_id FROM people WHERE email = ?)`,
-              [spouseName, email, name, email]
-            ).catch((err) => {
-              console.error("Error updating spouse_id:", err);
-            });
+            await db
+              .query(
+                "family_db",
+                `UPDATE people SET spouse_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
+                [spouseName, family_ids, name, family_ids]
+              )
+              .catch((err) => {
+                console.error("Error updating spouse_id:", err);
+              });
           }
         }
-        if(key == "children_names") {
-          let childrenNames = body.children_names.split(",").map(c => c.trim());
+        if (key == "children_names") {
+          let childrenNames = body.children_names
+            .split(",")
+            .map((c) => c.trim());
           for (const childName of childrenNames) {
-            await db.query(
-              "family_db",
-              `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (SELECT DISTINCT family_id FROM people WHERE email = ?)) WHERE name = ? AND family_id IN (SELECT DISTINCT family_id FROM people WHERE email = ?)`,
-              [childName, email, name, email]
-            ).catch((err) => {
-              console.error("Error updating child father_id:", err);
-            });
+            await db
+              .query(
+                "family_db",
+                `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
+                [childName, family_ids, name, family_ids]
+              )
+              .catch((err) => {
+                console.error("Error updating child father_id:", err);
+              });
           }
         }
       }
@@ -168,11 +176,9 @@ exports.private = function (app) {
       UPDATE people
       SET ${updates}
       WHERE name = ?
-      AND family_id IN (
-        SELECT DISTINCT family_id FROM people WHERE email = ?
-      )
+      AND family_id IN (?)
     `;
-    updateValues.push(name, email);
+    updateValues.push(name, family_ids);
 
     try {
       await db.query("family_db", sql, updateValues);
@@ -185,28 +191,24 @@ exports.private = function (app) {
   app.post("/people", async (req, res) => {
     let body = req.body;
     let email = req.session.google_data.email;
-    
 
     if (req.session.sd.role != "admin") {
       return res.status(403).json({ error: "Access Denied" });
     }
 
-    // Get family_id for the current user
-    let families = await db.query(
-      "family_db",
-      `SELECT DISTINCT family_id FROM people WHERE email = ?`,
-      [email]
-    );
-
-    if (!families.length) {
-      return res.status(400).json({ error: "No family found for user." });
+    if (!body.name) {
+      return res.status(400).json({ error: "Name is required." });  
     }
 
-    let family_id = families[0].family_id;
+    if (!body.family_id) {
+      return res.status(400).json({ error: "family_id is required." });
+    }
+
+    let family_id = body.family_id;
 
     // Build columns and values for insert
-    let columns = Object.keys(body).concat("family_id");
-    let values = Object.values(body).concat(family_id);
+    let columns = Object.keys(body);
+    let values = Object.values(body);
     let placeholders = columns.map(() => "?").join(", ");
 
     let sql = `
@@ -226,6 +228,27 @@ exports.private = function (app) {
     if (req.session.sd) return res.json(req.session.sd);
     let sd = await getSecurityDetails(req.session.google_data.email);
     res.json(sd[0]);
+  });
+
+  app.get("/roots", async (req, res) => {
+    let roots = await db.query(
+      "family_db",
+      "select family_id from user_roots where email = ?",
+      [req.session.google_data.email]
+    );
+    if (roots.length == 0) {
+      return res.status(404).json({ error: "No roots found for user." });
+    }
+    return res.json(roots.map((r) => r.family_id));
+  });
+
+  app.get("/family_ids", async (req, res) => {
+    let email = req.session.google_data.email;
+    let familyIds = await getFamilyIds(email);
+    if (familyIds.length == 0) {
+      return res.status(404).json({ error: "No family IDs found for user." });
+    }
+    return res.json(familyIds);
   });
 };
 
@@ -253,7 +276,62 @@ async function incramentLogins(email) {
   );
 }
 
+async function getFamilyIds(email) {
+  let all_people = await db.query("family_db", "select * from people");
+
+  let person_id = all_people.find((p) => p.email === email)?.ID;
+
+  let spouse_ids = all_people.filter((p) => p.spouse_id === person_id);
+
+  let all_ids = new Set([person_id, ...spouse_ids.map((p) => p.ID)]);
+
+  let id_stack = new Set([person_id, ...spouse_ids.map((p) => p.ID)]);
+  while (id_stack.size > 0) {
+    let current_id = id_stack.values().next().value;
+    id_stack.delete(current_id);
+
+    let parents = all_people.filter((p) => p.ID === current_id);
+    for (let parent of parents) {
+      if (!all_ids.has(parent.ID)) {
+        all_ids.add(parent.ID);
+        id_stack.add(parent.ID);
+      }
+      if (parent.father_id && !all_ids.has(parent.father_id)) {
+        all_ids.add(parent.father_id);
+        id_stack.add(parent.father_id);
+      }
+      if (parent.mother_id && !all_ids.has(parent.mother_id)) {
+        all_ids.add(parent.mother_id);
+        id_stack.add(parent.mother_id);
+      }
+    }
+  }
+
+  let roots = await db.query(
+    "family_db",
+    "select family_id from roots where father_id in (?) or mother_id in (?)",
+    [Array.from(all_ids), Array.from(all_ids)]
+  );
+
+  let owned_trees = await db.query(
+    "family_db",
+    "select family_id from user_roots where email = ?",
+    [email]
+  );
+
+  let all_family_ids = roots.concat(owned_trees).map((r) => r.family_id);
+  let unique_ids = [...new Set(all_family_ids)];
+
+  return unique_ids;
+}
+
 async function getProfile(name) {}
+
+async function loadFamilyIds(session) {
+  if (session.family_ids) return;
+  let familyIds = await getFamilyIds(session.google_data.email);
+  session.family_ids = familyIds;
+}
 
 exports.onlogin = async function (session) {
   if (session.google_data) {
@@ -265,6 +343,7 @@ exports.onlogin = async function (session) {
       incramentLogins(session.google_data.email);
     }
     session.sd = sd[0];
+    loadFamilyIds(session);
   }
 };
 

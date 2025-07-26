@@ -68,7 +68,7 @@ async function handleClick(name) {
   $("#phone").innerHTML = profile.phone;
   $("#email").innerHTML = profile.email;
   let birth_date = profile.birthday;
-  $("#bday").innerHTML = new Date(profile.birthday).toLocaleDateString(
+  $("#bday").innerHTML = birth_date == null ? '' : new Date(profile.birthday).toLocaleDateString(
     "en-us",
     {
       year: "numeric",
@@ -412,10 +412,29 @@ function renderTable() {
 
 $("#create-person").onclick = async () => {
   let modal = $("#add_person");
+  request('/roots').then(roots => {
+    if (roots.length === 0) {
+      alert("You need to create a family first. Please add a root person.");
+      return;
+    }
+    let familyIdSelect = $("#family-id");
+    familyIdSelect.innerHTML = ""; // Clear previous options
+    roots.forEach(familyId => {
+      let option = document.createElement("option");
+      option.value = familyId;
+      option.textContent = familyId; // Display family ID
+      familyIdSelect.appendChild(option);
+    });
+  });
   modal.classList.remove("hidden");
   $("#name-input").value = $("#search").value.trim();
   $("#new-person-submit").onclick = async () => {
     let nameInput = $("#name-input").value.trim();
+    let familyId = $("#family-id").value;
+    if (!familyId) {
+      alert("Please select a family ID.");
+      return;
+    }
     if (!nameInput) {
       alert("Name cannot be empty");
       return;
@@ -428,7 +447,7 @@ $("#create-person").onclick = async () => {
     // Create new person
     await request("/people", {
       method: "POST",
-      body: JSON.stringify({ name: nameInput }),
+      body: JSON.stringify({ name: nameInput, family_id: familyId }),
     });
     modal.classList.add("hidden");
     main(); // Refresh the table
