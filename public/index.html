@@ -83,7 +83,19 @@
       <div id="month"></div>
     </div>
 
+    <div id="settings" class="main out">
+      <h1>Settings</h1>
+      <div>
+        <h3>My Families</h3>
+        <div id="my-families"></div>
+      </div>
+      <div>
+        <button onclick="logout()">Logout</button>
+      </div>
+    </div>
+
     <div id="person_select_modal" class="hidden"></div>
+
     <div id="add_person" class="hidden">
       <h1>Add Person</h1>
       <fieldset>
@@ -101,7 +113,7 @@
     <img src="tree.png" alt="" />
     <img onclick="gotoCalendar()" id="calendar-icon" src="calendar.png" alt="" />
     <img src="filter.png" alt="" />
-    <img src="settings.png" alt="" />
+    <img onclick="gotoSettings()" src="settings.png" alt="" />
   </footer>
 
   <script src="main.js"></script>

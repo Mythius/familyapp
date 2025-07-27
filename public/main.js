@@ -47,10 +47,77 @@ function gotoProfile() {
   $("#profile").classList.remove("out");
 }
 
+function getIdByName(name) {
+  return all_people.filter((e) => e[2] == name)?.[0]?.[0];
+}
+
 function gotoCalendar() {
   hideAll();
   $("#calendar").classList.remove("out");
   populateCalendarMonth();
+}
+
+function createFamilyDiv(families) {
+  let innerHTML = "";
+  for (let family of families) {
+    innerHTML += /*html*/ `
+    <div name="${family.family_id}" onclick="updateFamilyRoot(this)" class="fam-id-span">
+      <span class="familyName">${family.family_id}</span>
+      <br>
+      Descendants and Family of
+      ${family.ancestor1} &
+      ${family.ancestor2}
+    </div>
+  `;
+  }
+  innerHTML += /*html*/ `
+    <button onclick="addFamily()">Add Family</button><hr>
+  `;
+  return innerHTML;
+}
+
+function wait(t = 1) {
+  return new Promise((res, rej) => {
+    setTimeout(() => {
+      res();
+    }, t * 1000);
+  });
+}
+
+async function updateFamilyRoot(e) {
+  let name = e.getAttribute('name');
+  let father = await personSelectModal(
+    "Select Patriarch (Eldest Male) of Family"
+  );
+  await wait(.1);
+  let mother = await personSelectModal(
+    "Select Matriarch (Eldest Female) of Family"
+  );
+  let father_id = getIdByName(father);
+  let mother_id = getIdByName(mother);
+  request(`/roots/${name}`, {
+    method: "POST",
+    body: JSON.stringify({ father_id, mother_id }),
+  });
+  gotoSettings();
+}
+
+async function gotoSettings() {
+  hideAll();
+  $("#settings").classList.remove("out");
+  let familyDiv = $("#my-families");
+  familyDiv.innerHTML = "Loading...";
+  let families = await request("/getMyFamiliesRoots");
+  familyDiv.innerHTML = createFamilyDiv(families);
+}
+
+async function addFamily() {
+  let familyName = prompt(
+    "Enter New Family Name (we recommend just last name)"
+  );
+  if (!familyName) return;
+  await request(`/family/${familyName}`, { method: "POST" });
+  gotoSettings();
 }
 
 async function handleClick(name) {
@@ -68,14 +135,14 @@ async function handleClick(name) {
   $("#phone").innerHTML = profile.phone;
   $("#email").innerHTML = profile.email;
   let birth_date = profile.birthday;
-  $("#bday").innerHTML = birth_date == null ? '' : new Date(profile.birthday).toLocaleDateString(
-    "en-us",
-    {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }
-  );
+  $("#bday").innerHTML =
+    birth_date == null
+      ? ""
+      : new Date(profile.birthday).toLocaleDateString("en-us", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
   $("#age").innerHTML = birth_date
     ? Math.floor((new Date() - new Date(birth_date)) / 31536000000)
     : "Brirthday not found";
@@ -120,7 +187,6 @@ function addEditButton(profile) {
     let editBtn = $("#edit-btn");
     let cancelBtn = $("#cancel-btn");
 
-    
     let genderField = $("#gender");
     if (profile.gender == null || profile.gender === "") {
       genderField.innerHTML = "Not selected";
@@ -250,7 +316,11 @@ function addEditButton(profile) {
           death_date: $("#dday-input").value,
           gender: (() => {
             const genderInput = $("#gender-input");
-            if (!genderInput || !genderInput.value || genderInput.value === "Not selected") {
+            if (
+              !genderInput ||
+              !genderInput.value ||
+              genderInput.value === "Not selected"
+            ) {
               return "";
             }
             const val = genderInput.value.toLowerCase();
@@ -279,19 +349,21 @@ function addEditButton(profile) {
   }
 }
 
-function personSelectModal() {
+function personSelectModal(title = "Select A Person") {
   return new Promise((resolve, reject) => {
     let modal = $("#person_select_modal");
     if (!personSelectModal.loaded) {
       personSelectModal.loaded = true;
       modal.innerHTML = `
       <div class="modal-content">
-        <h2>Select a Person</h2>
+        <h2>${title}</h2>
         <input type="text" id="person_search" placeholder="Search by name..." />
         <div id="person_list"></div>
         <button id="close_modal">Close</button>
       </div>
     `;
+    } else {
+      modal.querySelector('h2').innerHTML = title;
     }
 
     modal.classList.remove("hidden");
@@ -403,23 +475,28 @@ function renderTable() {
     table.appendChild(row);
   });
 
-  if(filteredData.length === 0) {
+  if (filteredData.length === 0) {
     $("#create-person").classList.remove("hidden");
   } else {
     $("#create-person").classList.add("hidden");
   }
 }
 
+function logout() {
+  delete localStorage.auth_token;
+  location.reload();
+}
+
 $("#create-person").onclick = async () => {
   let modal = $("#add_person");
-  request('/roots').then(roots => {
+  request("/family_ids").then((roots) => {
     if (roots.length === 0) {
       alert("You need to create a family first. Please add a root person.");
       return;
     }
     let familyIdSelect = $("#family-id");
     familyIdSelect.innerHTML = ""; // Clear previous options
-    roots.forEach(familyId => {
+    roots.forEach((familyId) => {
       let option = document.createElement("option");
       option.value = familyId;
       option.textContent = familyId; // Display family ID
@@ -451,13 +528,12 @@ $("#create-person").onclick = async () => {
     });
     modal.classList.add("hidden");
     main(); // Refresh the table
-  }
+  };
   $("#new-person-cancel").onclick = () => {
     modal.classList.add("hidden");
     nameInput.value = "";
-  }
-}
-
+  };
+};
 
 window.addEventListener("popstate", function (event) {
   // Prevent default back button behavior
