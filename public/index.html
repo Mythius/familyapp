@@ -80,6 +80,10 @@
       <button id="cancel-btn" style="display: none;">Cancel</button>
     </div>
 
+    <div id="tree" class="main out">
+      <canvas id="tree_display"></canvas>
+    </div>
+
     <div id="calendar" class="main out">
       <span onclick="prevMonth()">◀</span>
       <h3 id="monthlabel"></h3>
@@ -114,13 +118,15 @@
 
   <footer>
     <img onclick="gotoSearch()" id="search" src="search.png" alt="" />
-    <img src="tree.png" alt="" />
+    <img onclick="gotoTree()" src="tree.png" alt="" />
     <img onclick="gotoCalendar()" id="calendar-icon" src="calendar.png" alt="" />
     <img src="filter.png" alt="" />
     <img onclick="gotoSettings()" src="settings.png" alt="" />
   </footer>
 
   <script src="main.js"></script>
+  <script src="input.js"></script>
+  <script src="tree.js"></script>
 </body>
 
 </html>
