@@ -331,7 +331,7 @@ async function getFamilyIds(email) {
 
   let person_id = all_people.find((p) => p.email === email)?.ID;
 
-  let spouse_ids = all_people.filter((p) => p.spouse_id === person_id);
+  let spouse_ids = all_people.filter((p) => p.spouse_id == person_id);
 
   let all_ids = new Set([person_id, ...spouse_ids.map((p) => p.ID)]);
 
