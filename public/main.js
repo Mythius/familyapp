@@ -85,11 +85,11 @@ function wait(t = 1) {
 }
 
 async function updateFamilyRoot(e) {
-  let name = e.getAttribute('name');
+  let name = e.getAttribute("name");
   let father = await personSelectModal(
     "Select Patriarch (Eldest Male) of Family"
   );
-  await wait(.1);
+  await wait(0.1);
   let mother = await personSelectModal(
     "Select Matriarch (Eldest Female) of Family"
   );
@@ -155,6 +155,7 @@ async function handleClick(name) {
           month: "long",
           day: "numeric",
         });
+  $("#mname").innerHTML = profile.maiden_name;
   let parents = $("#parents");
   parents.innerHTML = "";
   if (profile.father_name) {
@@ -206,6 +207,7 @@ function addEditButton(profile) {
         { id: "bday", value: profile.birthday },
         { id: "dday", value: profile.death_date || "" },
         { id: "gender", value: profile.gender || "" },
+        { id: "mname", value: profile.maiden_name },
       ];
       fields.forEach((f) => {
         let el = $("#" + f.id);
@@ -314,6 +316,7 @@ function addEditButton(profile) {
           email: $("#email-input").value,
           birthday: $("#bday-input").value,
           death_date: $("#dday-input").value,
+          maiden_name: $("#mname-input").value,
           gender: (() => {
             const genderInput = $("#gender-input");
             if (
@@ -363,7 +366,7 @@ function personSelectModal(title = "Select A Person") {
       </div>
     `;
     } else {
-      modal.querySelector('h2').innerHTML = title;
+      modal.querySelector("h2").innerHTML = title;
     }
 
     modal.classList.remove("hidden");
