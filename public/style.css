@@ -1,5 +1,6 @@
 body {
   margin: 0;
+  touch-action: none;
 }
 
 main {
@@ -237,4 +238,8 @@ button {
 
 .fam-id-span > .familyName{
   font-weight: bold;
+}
+
+#tree{
+  overflow: hidden;
 }

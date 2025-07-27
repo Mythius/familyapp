@@ -84,6 +84,17 @@ function wait(t = 1) {
   });
 }
 
+function gotoTree(){
+  hideAll();
+  $("#tree").classList.remove("out");
+  const tree_div = $("#tree");
+  const canvas = $("#tree_display");
+  canvas.width = tree_div.clientWidth;
+  canvas.height = tree_div.clientHeight;
+  TREE_DIAGRAM.loadPeople(all_people);
+  TREE_DIAGRAM.draw();
+}
+
 async function updateFamilyRoot(e) {
   let name = e.getAttribute("name");
   let father = await personSelectModal(
