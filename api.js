@@ -263,7 +263,7 @@ exports.private = function (app) {
       return;
     }
 
-    if (!father_id && !mother_id) {
+    if (!body.father_id && !body.mother_id) {
       return res
         .status(400)
         .message({ error: "At least 1 ancestor must be specified" });
