@@ -197,7 +197,7 @@ exports.private = function (app) {
     }
 
     if (!body.name) {
-      return res.status(400).json({ error: "Name is required." });  
+      return res.status(400).json({ error: "Name is required." });
     }
 
     if (!body.family_id) {
@@ -230,16 +230,51 @@ exports.private = function (app) {
     res.json(sd[0]);
   });
 
-  app.get("/roots", async (req, res) => {
-    let roots = await db.query(
-      "family_db",
-      "select family_id from user_roots where email = ?",
-      [req.session.google_data.email]
-    );
-    if (roots.length == 0) {
-      return res.status(404).json({ error: "No roots found for user." });
+  app.post("/family/:id", async (req, res) => {
+    let family_id = req.params.id;
+    try {
+      let data = await db.query(
+        "family_db",
+        "insert into owned_families (email,family_id) VALUES (?,?)",
+        [req.session.google_data.email, family_id]
+      );
+      await loadFamilyIds(req.session, false);
+      res.json(data);
+      return;
+    } catch (e) {
+      res.status(500).json({ error: "Error Adding Root" });
+      return;
     }
-    return res.json(roots.map((r) => r.family_id));
+  });
+
+  app.post("/roots/:familyId", async (req, res) => {
+    let body = req.body;
+
+    let familyId = req.params.familyId;
+
+    if (req.session.sd.role != "admin") {
+      return res.status(403).json({ error: "Access Denied" });
+    }
+
+    if (!req.session.family_ids.includes(familyId)) {
+      res.status(403).json({
+        error: `Permission Denied to Edit family: ${familyId}`,
+      });
+      return;
+    }
+
+    if (!father_id && !mother_id) {
+      return res
+        .status(400)
+        .message({ error: "At least 1 ancestor must be specified" });
+    }
+
+    let data = await db.query(
+      "family_db",
+      "insert into roots (family_id,father_id,mother_id) values (?,?,?)",
+      [familyId, body.father_id, body.mother_id]
+    );
+    return res.json(data);
   });
 
   app.get("/family_ids", async (req, res) => {
@@ -249,6 +284,21 @@ exports.private = function (app) {
       return res.status(404).json({ error: "No family IDs found for user." });
     }
     return res.json(familyIds);
+  });
+
+  app.get("/getMyFamiliesRoots", async (req, res) => {
+    let familyIds = req.session.family_ids;
+    let roots = await db.query(
+      "family_db",
+      `select o.family_id, p1.name ancestor1, p2.name ancestor2
+      from owned_families o
+      left join roots r on o.family_id = r.family_id
+      left join people p1 on p1.id = r.father_id 
+      left join people p2 on p2.id = r.mother_id 
+      where o.family_id in (?)`,
+      [familyIds]
+    );
+    return res.json(roots);
   });
 };
 
@@ -315,7 +365,7 @@ async function getFamilyIds(email) {
 
   let owned_trees = await db.query(
     "family_db",
-    "select family_id from user_roots where email = ?",
+    "select family_id from owned_families where email = ?",
     [email]
   );
 
@@ -327,8 +377,8 @@ async function getFamilyIds(email) {
 
 async function getProfile(name) {}
 
-async function loadFamilyIds(session) {
-  if (session.family_ids) return;
+async function loadFamilyIds(session, soft = true) {
+  if (session.family_ids && soft) return;
   let familyIds = await getFamilyIds(session.google_data.email);
   session.family_ids = familyIds;
 }
