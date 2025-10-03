@@ -293,7 +293,6 @@
   TREE_DIAGRAM.pan = pan;
   TREE_DIAGRAM.loadPeople = function (ap) {
     people = ap
-      .filter((e, i) => i > 0)
       .map((e) => {
         return {
           id: e[0],
