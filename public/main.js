@@ -24,6 +24,31 @@ async function main() {
     });
   document.querySelector("load").classList.add("hidden");
   renderTable(names);
+  request("/family_ids").then((roots) => {
+    if (roots.length === 0) {
+      alert("You need to create a family first. Please add a root person.");
+      return;
+    }
+    let familyIdSelect = $("#family-id");
+    familyIdSelect.innerHTML = ""; // Clear previous options
+    roots.forEach((familyId) => {
+      let option = document.createElement("option");
+      option.value = familyId;
+      option.textContent = familyId; // Display family ID
+      familyIdSelect.appendChild(option);
+    });
+    let tree_select = $("#tree-family-select");
+    tree_select.onchange = function () {
+      gotoTree(all_people.filter((e) => e[1] == tree_select.value));
+    };
+    tree_select.innerHTML = "";
+    roots.forEach((familyId) => {
+      let option = document.createElement("option");
+      option.value = familyId;
+      option.textContent = familyId; // Display family ID
+      tree_select.appendChild(option);
+    });
+  });
 }
 
 let names, all_people;
@@ -84,14 +109,18 @@ function wait(t = 1) {
   });
 }
 
-function gotoTree(){
+function gotoTree(
+  people = all_people.filter(
+    (e) => e[1] == $("#tree-family-select").value
+  )
+) {
   hideAll();
   $("#tree").classList.remove("out");
   const tree_div = $("#tree");
   const canvas = $("#tree_display");
   canvas.width = tree_div.clientWidth;
   canvas.height = tree_div.clientHeight;
-  TREE_DIAGRAM.loadPeople(all_people);
+  TREE_DIAGRAM.loadPeople(people);
   TREE_DIAGRAM.draw();
 }
 
@@ -503,20 +532,7 @@ function logout() {
 
 $("#create-person").onclick = async () => {
   let modal = $("#add_person");
-  request("/family_ids").then((roots) => {
-    if (roots.length === 0) {
-      alert("You need to create a family first. Please add a root person.");
-      return;
-    }
-    let familyIdSelect = $("#family-id");
-    familyIdSelect.innerHTML = ""; // Clear previous options
-    roots.forEach((familyId) => {
-      let option = document.createElement("option");
-      option.value = familyId;
-      option.textContent = familyId; // Display family ID
-      familyIdSelect.appendChild(option);
-    });
-  });
+
   modal.classList.remove("hidden");
   $("#name-input").value = $("#search").value.trim();
   $("#new-person-submit").onclick = async () => {
