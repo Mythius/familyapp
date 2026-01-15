@@ -27,6 +27,10 @@ exports.private = function (app) {
   app.get("/people", async (req, res) => {
     await loadVisiblePeopleIds(req.session);
 
+    if (!req.session.visible_people_ids || req.session.visible_people_ids.length === 0) {
+      return res.json([]);
+    }
+
     db.queryToCSV("family_db", "select * from people where ID in (?)", [
       req.session.visible_people_ids,
     ]).then((data) => {
@@ -36,6 +40,9 @@ exports.private = function (app) {
 
   app.get("/people/:name", async (req, res) => {
     await loadVisiblePeopleIds(req.session);
+    if (!req.session.visible_people_ids || req.session.visible_people_ids.length === 0) {
+      return res.json([]);
+    }
     let d = await db.query(
       "family_db",
       `SELECT
@@ -298,7 +305,11 @@ exports.private = function (app) {
   });
 
   app.get("/getMyFamiliesRoots", async (req, res) => {
+    await loadFamilyIds(req.session);
     let familyIds = req.session.family_ids;
+    if (!familyIds || familyIds.length === 0) {
+      return res.json([]);
+    }
     let roots = await db.query(
       "family_db",
       `select o.family_id, p1.name ancestor1, p2.name ancestor2
@@ -518,6 +529,16 @@ async function getFamilyIds(email) {
 
   let person_id = all_people.find((p) => p.email === email)?.ID;
 
+  // If user is not in people table, only check owned_families
+  if (!person_id) {
+    let owned_trees = await db.query(
+      "family_db",
+      "select family_id from owned_families where email = ?",
+      [email]
+    );
+    return owned_trees.map((r) => r.family_id);
+  }
+
   let spouse_ids = all_people.filter((p) => p.spouse_id == person_id);
 
   let all_ids = new Set([person_id, ...spouse_ids.map((p) => p.ID)]);
@@ -566,6 +587,10 @@ async function getProfile(name) {}
 
 // Given family_ids, get all root ancestor IDs, then traverse DOWN to find all descendants and their spouses
 async function getVisiblePeopleIds(familyIds) {
+  if (!familyIds || familyIds.length === 0) {
+    return [];
+  }
+
   let all_people = await db.query("family_db", "select * from people");
 
   // Get roots for these family_ids
