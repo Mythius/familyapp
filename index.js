@@ -76,7 +76,7 @@ app.post("/auth", async (req, res) => {
     sessions[token].username = cred.username;
     auth[cred.username].token = token;
     if (true) {
-      sessions[token].google_data = { email: "southwickmatthias@gmail.com" };
+      sessions[token].google_data = { email: "nathansouthwick@gmail.com" };
     }
     if (API.onlogin) await API.onlogin(sessions[token]);
     res.json({ message: "Successfully Logged In", token });
