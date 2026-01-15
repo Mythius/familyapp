@@ -449,7 +449,64 @@ exports.private = function (app) {
       return res.status(500).json({ error: "Failed to revoke permission" });
     }
   });
+
+  // Get descendants of a specific person (for filtering)
+  app.get("/descendants/:personId", async (req, res) => {
+    let personId = parseInt(req.params.personId);
+    if (isNaN(personId)) {
+      return res.status(400).json({ error: "Invalid person ID" });
+    }
+
+    await loadVisiblePeopleIds(req.session);
+
+    // Make sure the person is visible to the user
+    if (!req.session.visible_people_ids.includes(personId)) {
+      return res.status(403).json({ error: "You don't have access to this person" });
+    }
+
+    let descendantIds = await getDescendantIds(personId);
+    return res.json(descendantIds);
+  });
 };
+
+// Get all descendants of a person (including spouses of descendants)
+async function getDescendantIds(personId) {
+  let all_people = await db.query("family_db", "select * from people");
+
+  let descendantIds = new Set([personId]);
+  let toProcess = new Set([personId]);
+
+  while (toProcess.size > 0) {
+    let currentId = toProcess.values().next().value;
+    toProcess.delete(currentId);
+
+    // Find children (people whose father_id or mother_id is currentId)
+    let children = all_people.filter(
+      (p) => p.father_id === currentId || p.mother_id === currentId
+    );
+
+    for (let child of children) {
+      if (!descendantIds.has(child.ID)) {
+        descendantIds.add(child.ID);
+        toProcess.add(child.ID);
+      }
+      // Also add the child's spouse(s)
+      if (child.spouse_id && !descendantIds.has(child.spouse_id)) {
+        descendantIds.add(child.spouse_id);
+      }
+    }
+
+    // Also find anyone who has currentId as their spouse
+    let spousesOf = all_people.filter((p) => p.spouse_id === currentId);
+    for (let spouse of spousesOf) {
+      if (!descendantIds.has(spouse.ID)) {
+        descendantIds.add(spouse.ID);
+      }
+    }
+  }
+
+  return Array.from(descendantIds);
+}
 
 async function getSecurityDetails(email) {
   return await db.query(
