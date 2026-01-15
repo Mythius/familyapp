@@ -16,9 +16,9 @@ const ssh_config = {
   user: "matthias",
   password: "",
   port: 22,
-}
+};
 
-function sshQuery( db, query, values = []) {
+function sshQuery(db, query, values = []) {
   return new Promise((res, rej) => {
     var dbServer = {
       host: `localhost`,
@@ -65,8 +65,6 @@ function sshQuery( db, query, values = []) {
           );
         })
         .connect(tunnelConfig);
-
-        
     });
     SSHConnection.then((connection) => {
       // console.log(connection);
