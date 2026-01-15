@@ -924,26 +924,14 @@ function exportToCSV() {
     return;
   }
 
-  // CSV headers
-  let headers = ["ID", "Family", "Name", "Address", "Phone", "Email", "Gender", "Marriage Date", "Birthday", "Death Date", "Maiden Name"];
+  // Use the header row from all_people (first row contains column names)
+  let headers = all_people[0];
 
   // Build CSV content
-  let csvContent = headers.join(",") + "\n";
+  let csvContent = headers.map(h => escapeCSV(h)).join(",") + "\n";
 
   filteredPeople.forEach(person => {
-    let row = [
-      person[0] || "",           // ID
-      person[1] || "",           // Family ID
-      escapeCSV(person[2] || ""), // Name
-      escapeCSV(person[3] || ""), // Address
-      escapeCSV(person[4] || ""), // Phone
-      escapeCSV(person[5] || ""), // Email
-      person[6] || "",           // Gender
-      formatDateForCSV(person[7]), // Marriage Date
-      formatDateForCSV(person[8]), // Birthday
-      formatDateForCSV(person[9]), // Death Date
-      escapeCSV(person[10] || "") // Maiden Name
-    ];
+    let row = person.map(val => escapeCSV(val));
     csvContent += row.join(",") + "\n";
   });
 
