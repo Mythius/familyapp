@@ -738,11 +738,84 @@ async function revokePermission(familyId, email) {
 
 // Filters functionality
 let filteredPeople = [];
+let descendantIds = null; // Cached descendant IDs for current filter
 
 function gotoFilters() {
   hideAll();
   $("#filters").classList.remove("out");
   populateFilterFamilyDropdown();
+  setupDescendantSearch();
+  applyFilters();
+}
+
+function setupDescendantSearch() {
+  let searchInput = $("#filter-descendant-search");
+  let resultsDiv = $("#descendant-search-results");
+
+  searchInput.oninput = () => {
+    let searchTerm = searchInput.value.toLowerCase().trim();
+    resultsDiv.innerHTML = "";
+
+    if (searchTerm.length < 1) {
+      resultsDiv.style.display = "none";
+      return;
+    }
+
+    let matches = names.filter(p => p.name.toLowerCase().includes(searchTerm)).slice(0, 10);
+
+    if (matches.length > 0) {
+      resultsDiv.style.display = "block";
+      matches.forEach(p => {
+        let div = document.createElement("div");
+        div.className = "search-result-item";
+        div.textContent = p.name;
+        div.onclick = () => selectDescendantAncestor(p.name);
+        resultsDiv.appendChild(div);
+      });
+    } else {
+      resultsDiv.style.display = "none";
+    }
+  };
+
+  // Hide results when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".filter-section")) {
+      resultsDiv.style.display = "none";
+    }
+  });
+}
+
+async function selectDescendantAncestor(name) {
+  let personId = getIdByName(name);
+  if (!personId) {
+    alert("Person not found");
+    return;
+  }
+
+  $("#filter-descendant-search").value = "";
+  $("#filter-descendant-search").style.display = "none";
+  $("#filter-descendant-id").value = personId;
+  $("#filter-descendant-name").textContent = name;
+  $("#clear-descendant").style.display = "inline";
+  $("#descendant-search-results").style.display = "none";
+
+  // Fetch descendants from backend
+  try {
+    descendantIds = await request(`/descendants/${personId}`);
+    applyFilters();
+  } catch (e) {
+    alert("Error fetching descendants");
+    clearDescendantFilter();
+  }
+}
+
+function clearDescendantFilter() {
+  $("#filter-descendant-search").value = "";
+  $("#filter-descendant-search").style.display = "";
+  $("#filter-descendant-id").value = "";
+  $("#filter-descendant-name").textContent = "";
+  $("#clear-descendant").style.display = "none";
+  descendantIds = null;
   applyFilters();
 }
 
@@ -779,11 +852,15 @@ function applyFilters() {
   filteredPeople = all_people.filter((person, index) => {
     if (index === 0) return false; // Skip header row
 
+    let personId = person[0];
     let familyId = person[1];
     let name = person[2];
-    let gender = person[6];
+    let gender = person[3];
     let birthday = person[8];
-    let deathDate = person[9];
+    let deathDate = person[13];
+
+    // Descendants filter - if set, only show people in the descendant list
+    if (descendantIds && !descendantIds.includes(personId)) return false;
 
     // Family filter
     if (familyFilter && familyId !== familyFilter) return false;
@@ -838,7 +915,7 @@ function clearFilters() {
   $("#filter-age-min").value = "";
   $("#filter-age-max").value = "";
   $("#filter-has-birthday").value = "";
-  applyFilters();
+  clearDescendantFilter();
 }
 
 function exportToCSV() {

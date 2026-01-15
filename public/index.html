@@ -114,6 +114,17 @@
         </div>
 
         <div class="filter-section">
+          <h3>Descendants of</h3>
+          <div class="descendant-filter">
+            <input type="text" id="filter-descendant-search" placeholder="Search person..." />
+            <input type="hidden" id="filter-descendant-id" />
+            <span id="filter-descendant-name"></span>
+            <button onclick="clearDescendantFilter()" class="clear-btn" style="display:none" id="clear-descendant">✕</button>
+          </div>
+          <div id="descendant-search-results" class="search-dropdown"></div>
+        </div>
+
+        <div class="filter-section">
           <h3>Gender</h3>
           <select id="filter-gender">
             <option value="">All</option>

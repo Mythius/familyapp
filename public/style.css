@@ -615,3 +615,70 @@ button {
     width: 90%;
   }
 }
+
+/* Descendant filter */
+.descendant-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.descendant-filter input[type="text"] {
+  flex: 1;
+  min-width: 150px;
+}
+
+#filter-descendant-name {
+  font-weight: bold;
+  color: #0056b3;
+  padding: 5px 10px;
+  background: #e7f3ff;
+  border-radius: 15px;
+}
+
+.clear-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 24px;
+  min-width: 24px;
+}
+
+.search-dropdown {
+  display: none;
+  position: absolute;
+  background: white;
+  border: 1px solid #ced4da;
+  border-radius: 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+  width: calc(100% - 24px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.search-result-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+}
+
+.search-result-item:hover {
+  background-color: #f0f8ff;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.filter-section {
+  position: relative;
+}
