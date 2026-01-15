@@ -2,7 +2,16 @@
 
 # Load environment variables from .env file
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/.env"
+
+# Parse .env file manually to handle special characters
+export $(grep -v '^#' "$SCRIPT_DIR/.env" | sed 's/\r$//' | while IFS='=' read -r key value; do
+    # Remove surrounding quotes if present
+    value="${value%\"}"
+    value="${value#\"}"
+    value="${value%\'}"
+    value="${value#\'}"
+    echo "$key=$value"
+done)
 
 # Configuration
 DATABASE_NAME="family_db"
@@ -16,10 +25,22 @@ mkdir -p "$BACKUP_DIR"
 
 echo "Starting database backup..."
 
-# Run mysqldump locally
-mysqldump -h localhost -u "$DB_USER" -p"$DB_PASS" "$DATABASE_NAME" > "$BACKUP_DIR/$BACKUP_FILE"
+# Run mysqldump locally using config file to avoid password issues
+MYSQL_CONFIG=$(mktemp)
+chmod 600 "$MYSQL_CONFIG"
+cat > "$MYSQL_CONFIG" << EOF
+[mysqldump]
+user=$DB_USER
+password=$DB_PASS
+EOF
 
-if [ $? -eq 0 ]; then
+mysqldump --defaults-extra-file="$MYSQL_CONFIG" -h localhost "$DATABASE_NAME" > "$BACKUP_DIR/$BACKUP_FILE"
+DUMP_RESULT=$?
+
+# Remove temp config file
+rm -f "$MYSQL_CONFIG"
+
+if [ $DUMP_RESULT -eq 0 ]; then
     echo "Database backup created: $BACKUP_DIR/$BACKUP_FILE"
 
     # Compress the backup
