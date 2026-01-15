@@ -501,17 +501,16 @@ async function getDescendantIds(personId) {
         descendantIds.add(child.ID);
         toProcess.add(child.ID);
       }
-      // Also add the child's spouse(s)
+      // Also add the child's spouse(s) - check both directions
       if (child.spouse_id && !descendantIds.has(child.spouse_id)) {
         descendantIds.add(child.spouse_id);
       }
-    }
-
-    // Also find anyone who has currentId as their spouse
-    let spousesOf = all_people.filter((p) => p.spouse_id === currentId);
-    for (let spouse of spousesOf) {
-      if (!descendantIds.has(spouse.ID)) {
-        descendantIds.add(spouse.ID);
+      // Check if anyone has this child as their spouse (reverse direction)
+      let childSpouses = all_people.filter((p) => p.spouse_id === child.ID);
+      for (let spouse of childSpouses) {
+        if (!descendantIds.has(spouse.ID)) {
+          descendantIds.add(spouse.ID);
+        }
       }
     }
   }
