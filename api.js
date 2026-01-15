@@ -25,22 +25,20 @@ exports.private = function (app) {
   });
 
   app.get("/people", async (req, res) => {
-    let email = req.session.google_data.email;
+    await loadVisiblePeopleIds(req.session);
 
-    await loadFamilyIds(req.session);
-
-    db.queryToCSV("family_db", "select * from people where family_id in (?)", [
-      req.session.family_ids,
+    db.queryToCSV("family_db", "select * from people where ID in (?)", [
+      req.session.visible_people_ids,
     ]).then((data) => {
       res.json(data);
     });
   });
 
   app.get("/people/:name", async (req, res) => {
-    let email = req.session.google_data.email;
+    await loadVisiblePeopleIds(req.session);
     let d = await db.query(
       "family_db",
-      `SELECT 
+      `SELECT
         p1.*,
         p2.name AS father_name,
         p2.ID AS father_id,
@@ -54,7 +52,7 @@ exports.private = function (app) {
       LEFT JOIN people p2 ON p1.father_id = p2.ID
       LEFT JOIN people p3 ON p1.mother_id = p3.ID
       LEFT JOIN (
-        SELECT 
+        SELECT
           spouse_link.person_id,
           GROUP_CONCAT(DISTINCT p.name ORDER BY p.marriage_date ASC) AS names,
           GROUP_CONCAT(DISTINCT p.ID ORDER BY p.marriage_date ASC) AS IDs
@@ -75,24 +73,39 @@ exports.private = function (app) {
         GROUP BY father_id, mother_id
       ) c ON (c.father_id = p1.ID OR c.mother_id = p1.ID)
       WHERE p1.name = ?
-      AND p1.family_id IN (?)
+      AND p1.ID IN (?)
       GROUP BY p1.ID
       `,
-      [decodeURI(req.params.name), req.session.family_ids]
+      [decodeURI(req.params.name), req.session.visible_people_ids]
     );
     res.json(d);
   });
 
   app.post("/people/:name", async (req, res) => {
     let body = req.body;
-    let email = req.session.google_data.email;
     let name = decodeURI(req.params.name);
 
-    if (req.session.sd.role != "admin") {
-      return res.status(403).json({ error: "Access Denied" });
+    // Get the person being edited to check their family_id
+    await loadVisiblePeopleIds(req.session);
+    let person = await db.query(
+      "family_db",
+      "select ID, family_id from people where name = ? and ID in (?)",
+      [name, req.session.visible_people_ids]
+    );
+
+    if (person.length === 0) {
+      return res.status(404).json({ error: "Person not found" });
     }
 
-    let family_ids = req.session.family_ids;
+    let personFamilyId = person[0].family_id;
+
+    // Check if user can edit this family
+    if (!(await canEditFamily(req.session, personFamilyId))) {
+      return res.status(403).json({ error: "You don't have edit permission for this family" });
+    }
+
+    // Get editable family_ids for relationship updates
+    let editable_family_ids = await getEditableFamilyIds(req.session);
 
     // Handle relationship fields
     const relationshipFields = [
@@ -107,7 +120,7 @@ exports.private = function (app) {
           db.query(
             "family_db",
             `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
-            [body.father_name, family_ids, name, family_ids]
+            [body.father_name, editable_family_ids, name, editable_family_ids]
           ).catch((err) => {
             console.error("Error updating father_id:", err);
           });
@@ -116,7 +129,7 @@ exports.private = function (app) {
           db.query(
             "family_db",
             `UPDATE people SET mother_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
-            [body.mother_name, family_ids, name, family_ids]
+            [body.mother_name, editable_family_ids, name, editable_family_ids]
           ).catch((err) => {
             console.error("Error updating father_id:", err);
           });
@@ -128,7 +141,7 @@ exports.private = function (app) {
               .query(
                 "family_db",
                 `UPDATE people SET spouse_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
-                [spouseName, family_ids, name, family_ids]
+                [spouseName, editable_family_ids, name, editable_family_ids]
               )
               .catch((err) => {
                 console.error("Error updating spouse_id:", err);
@@ -144,7 +157,7 @@ exports.private = function (app) {
               .query(
                 "family_db",
                 `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
-                [childName, family_ids, name, family_ids]
+                [childName, editable_family_ids, name, editable_family_ids]
               )
               .catch((err) => {
                 console.error("Error updating child father_id:", err);
@@ -178,7 +191,7 @@ exports.private = function (app) {
       WHERE name = ?
       AND family_id IN (?)
     `;
-    updateValues.push(name, family_ids);
+    updateValues.push(name, editable_family_ids);
 
     try {
       await db.query("family_db", sql, updateValues);
@@ -190,11 +203,6 @@ exports.private = function (app) {
 
   app.post("/people", async (req, res) => {
     let body = req.body;
-    let email = req.session.google_data.email;
-
-    if (req.session.sd.role != "admin") {
-      return res.status(403).json({ error: "Access Denied" });
-    }
 
     if (!body.name) {
       return res.status(400).json({ error: "Name is required." });
@@ -205,6 +213,11 @@ exports.private = function (app) {
     }
 
     let family_id = body.family_id;
+
+    // Check if user can edit this family
+    if (!(await canEditFamily(req.session, family_id))) {
+      return res.status(403).json({ error: "You don't have edit permission for this family" });
+    }
 
     // Build columns and values for insert
     let columns = Object.keys(body);
@@ -225,9 +238,14 @@ exports.private = function (app) {
   });
 
   app.get("/permissions", async (req, res) => {
-    if (req.session.sd) return res.json(req.session.sd);
-    let sd = await getSecurityDetails(req.session.google_data.email);
-    res.json(sd[0]);
+    let sd = req.session.sd;
+    if (!sd) {
+      let sdArr = await getSecurityDetails(req.session.google_data.email);
+      sd = sdArr[0];
+    }
+    // Include family-specific permissions
+    let familyPermissions = await getFamilyPermissions(req.session.google_data.email);
+    res.json({ ...sd, family_permissions: familyPermissions });
   });
 
   app.post("/family/:id", async (req, res) => {
@@ -249,24 +267,17 @@ exports.private = function (app) {
 
   app.post("/roots/:familyId", async (req, res) => {
     let body = req.body;
-
     let familyId = req.params.familyId;
 
-    if (req.session.sd.role != "admin") {
-      return res.status(403).json({ error: "Access Denied" });
-    }
-
-    if (!req.session.family_ids.includes(familyId)) {
-      res.status(403).json({
-        error: `Permission Denied to Edit family: ${familyId}`,
-      });
-      return;
+    // Check if user can edit this family
+    if (!(await canEditFamily(req.session, familyId))) {
+      return res.status(403).json({ error: "You don't have edit permission for this family" });
     }
 
     if (!body.father_id && !body.mother_id) {
       return res
         .status(400)
-        .message({ error: "At least 1 ancestor must be specified" });
+        .json({ error: "At least 1 ancestor must be specified" });
     }
 
     let data = await db.query(
@@ -293,12 +304,118 @@ exports.private = function (app) {
       `select o.family_id, p1.name ancestor1, p2.name ancestor2
       from owned_families o
       left join roots r on o.family_id = r.family_id
-      left join people p1 on p1.id = r.father_id 
-      left join people p2 on p2.id = r.mother_id 
+      left join people p1 on p1.id = r.father_id
+      left join people p2 on p2.id = r.mother_id
       where o.family_id in (?)`,
       [familyIds]
     );
     return res.json(roots);
+  });
+
+  // Get user's permissions for all their families
+  app.get("/my-family-permissions", async (req, res) => {
+    let permissions = await getFamilyPermissions(req.session.google_data.email);
+    return res.json(permissions);
+  });
+
+  // Get all editors/viewers for a family (only owners can see this)
+  app.get("/family-permissions/:familyId", async (req, res) => {
+    let familyId = req.params.familyId;
+    let permissions = await getFamilyPermissions(req.session.google_data.email);
+
+    if (permissions[familyId] !== "owner") {
+      return res
+        .status(403)
+        .json({ error: "Only owners can view family permissions" });
+    }
+
+    let members = await db
+      .query(
+        "family_db",
+        "select email, role from family_permissions where family_id = ?",
+        [familyId]
+      )
+      .catch(() => []);
+
+    return res.json(members);
+  });
+
+  // Grant permission to a user for a family (only owners can do this)
+  app.post("/family-permissions/:familyId", async (req, res) => {
+    let familyId = req.params.familyId;
+    let { email, role } = req.body;
+
+    if (!email || !role) {
+      return res.status(400).json({ error: "email and role are required" });
+    }
+
+    if (role !== "editor" && role !== "viewer") {
+      return res.status(400).json({ error: "role must be 'editor' or 'viewer'" });
+    }
+
+    let permissions = await getFamilyPermissions(req.session.google_data.email);
+
+    if (permissions[familyId] !== "owner") {
+      return res
+        .status(403)
+        .json({ error: "Only owners can grant family permissions" });
+    }
+
+    try {
+      // Check if permission already exists
+      let existing = await db.query(
+        "family_db",
+        "select * from family_permissions where email = ? and family_id = ?",
+        [email, familyId]
+      );
+
+      if (existing.length > 0) {
+        // Update existing permission
+        await db.query(
+          "family_db",
+          "update family_permissions set role = ? where email = ? and family_id = ?",
+          [role, email, familyId]
+        );
+      } else {
+        // Insert new permission
+        await db.query(
+          "family_db",
+          "insert into family_permissions (email, family_id, role) values (?, ?, ?)",
+          [email, familyId, role]
+        );
+      }
+
+      return res.json({ success: true, message: `Granted ${role} access to ${email}` });
+    } catch (e) {
+      console.error("Error granting permission:", e);
+      return res.status(500).json({ error: "Failed to grant permission" });
+    }
+  });
+
+  // Revoke permission from a user for a family (only owners can do this)
+  app.delete("/family-permissions/:familyId/:email", async (req, res) => {
+    let familyId = req.params.familyId;
+    let email = decodeURIComponent(req.params.email);
+
+    let permissions = await getFamilyPermissions(req.session.google_data.email);
+
+    if (permissions[familyId] !== "owner") {
+      return res
+        .status(403)
+        .json({ error: "Only owners can revoke family permissions" });
+    }
+
+    try {
+      await db.query(
+        "family_db",
+        "delete from family_permissions where email = ? and family_id = ?",
+        [email, familyId]
+      );
+      return res.json({ success: true, message: `Revoked access from ${email}` });
+    } catch (e) {
+      console.error("Error revoking permission:", e);
+      return res.status(500).json({ error: "Failed to revoke permission" });
+    }
   });
 };
 
@@ -324,6 +441,76 @@ async function incramentLogins(email) {
     `update security set logins = logins + 1 where email = ?`,
     [email]
   );
+}
+
+// Get family-specific permissions for a user
+// Returns { family_id: role } map where role is 'owner', 'editor', or 'viewer'
+async function getFamilyPermissions(email) {
+  // Get owned families (these are 'owner' permissions)
+  let owned = await db.query(
+    "family_db",
+    "select family_id from owned_families where email = ?",
+    [email]
+  );
+
+  // Get granted permissions from family_permissions table
+  let granted = await db.query(
+    "family_db",
+    "select family_id, role from family_permissions where email = ?",
+    [email]
+  ).catch(() => []);
+
+  let permissions = {};
+
+  // Owners have full access
+  for (let row of owned) {
+    permissions[row.family_id] = "owner";
+  }
+
+  // Add granted permissions (owner status takes precedence)
+  for (let row of granted) {
+    if (!permissions[row.family_id]) {
+      permissions[row.family_id] = row.role;
+    }
+  }
+
+  return permissions;
+}
+
+// Check if user can edit a specific family
+async function canEditFamily(session, familyId) {
+  if (!session.family_permissions) {
+    session.family_permissions = await getFamilyPermissions(
+      session.google_data.email
+    );
+  }
+  const role = session.family_permissions[familyId];
+  return role === "owner" || role === "editor";
+}
+
+// Check if user can edit any of the given family_ids
+async function canEditAnyFamily(session, familyIds) {
+  if (!session.family_permissions) {
+    session.family_permissions = await getFamilyPermissions(
+      session.google_data.email
+    );
+  }
+  return familyIds.some((fid) => {
+    const role = session.family_permissions[fid];
+    return role === "owner" || role === "editor";
+  });
+}
+
+// Get list of family_ids the user can edit
+async function getEditableFamilyIds(session) {
+  if (!session.family_permissions) {
+    session.family_permissions = await getFamilyPermissions(
+      session.google_data.email
+    );
+  }
+  return Object.entries(session.family_permissions)
+    .filter(([_, role]) => role === "owner" || role === "editor")
+    .map(([fid, _]) => fid);
 }
 
 async function getFamilyIds(email) {
@@ -377,10 +564,68 @@ async function getFamilyIds(email) {
 
 async function getProfile(name) {}
 
+// Given family_ids, get all root ancestor IDs, then traverse DOWN to find all descendants and their spouses
+async function getVisiblePeopleIds(familyIds) {
+  let all_people = await db.query("family_db", "select * from people");
+
+  // Get roots for these family_ids
+  let roots = await db.query(
+    "family_db",
+    "select father_id, mother_id from roots where family_id in (?)",
+    [familyIds]
+  );
+
+  // Start with root ancestors (convert to numbers since roots table stores as strings)
+  let visibleIds = new Set();
+  for (let root of roots) {
+    if (root.father_id) visibleIds.add(Number(root.father_id));
+    if (root.mother_id) visibleIds.add(Number(root.mother_id));
+  }
+
+  // Traverse down: find all descendants
+  let toProcess = new Set(visibleIds);
+  while (toProcess.size > 0) {
+    let currentId = toProcess.values().next().value;
+    toProcess.delete(currentId);
+
+    // Find children (people whose father_id or mother_id is currentId)
+    let children = all_people.filter(
+      (p) => p.father_id === currentId || p.mother_id === currentId
+    );
+
+    for (let child of children) {
+      if (!visibleIds.has(child.ID)) {
+        visibleIds.add(child.ID);
+        toProcess.add(child.ID);
+      }
+      // Also add the child's spouse(s)
+      if (child.spouse_id && !visibleIds.has(child.spouse_id)) {
+        visibleIds.add(child.spouse_id);
+      }
+    }
+
+    // Also find anyone who has currentId as their spouse
+    let spousesOf = all_people.filter((p) => p.spouse_id === currentId);
+    for (let spouse of spousesOf) {
+      if (!visibleIds.has(spouse.ID)) {
+        visibleIds.add(spouse.ID);
+      }
+    }
+  }
+
+  return Array.from(visibleIds);
+}
+
 async function loadFamilyIds(session, soft = true) {
   if (session.family_ids && soft) return;
   let familyIds = await getFamilyIds(session.google_data.email);
   session.family_ids = familyIds;
+}
+
+async function loadVisiblePeopleIds(session, soft = true) {
+  if (session.visible_people_ids && soft) return;
+  await loadFamilyIds(session, soft);
+  session.visible_people_ids = await getVisiblePeopleIds(session.family_ids);
 }
 
 exports.onlogin = async function (session) {
@@ -393,7 +638,7 @@ exports.onlogin = async function (session) {
       incramentLogins(session.google_data.email);
     }
     session.sd = sd[0];
-    loadFamilyIds(session);
+    await loadFamilyIds(session);
   }
 };
 
