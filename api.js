@@ -600,12 +600,30 @@ async function getFamilyIds(email) {
 async function getProfile(name) {}
 
 // Given family_ids, get all root ancestor IDs, then traverse DOWN to find all descendants and their spouses
-async function getVisiblePeopleIds(familyIds) {
+// Also includes all people in families the user owns or can edit
+async function getVisiblePeopleIds(familyIds, email) {
   if (!familyIds || familyIds.length === 0) {
     return [];
   }
 
   let all_people = await db.query("family_db", "select * from people");
+
+  let visibleIds = new Set();
+
+  // First, add all people from families the user owns or has edit access to
+  // This ensures owners can always see everyone in their families, even without roots
+  if (email) {
+    let permissions = await getFamilyPermissions(email);
+    let editableFamilyIds = Object.entries(permissions)
+      .filter(([_, role]) => role === "owner" || role === "editor")
+      .map(([fid, _]) => fid);
+
+    for (let person of all_people) {
+      if (person.family_id && editableFamilyIds.includes(person.family_id)) {
+        visibleIds.add(person.ID);
+      }
+    }
+  }
 
   // Get roots for these family_ids
   let roots = await db.query(
@@ -614,8 +632,7 @@ async function getVisiblePeopleIds(familyIds) {
     [familyIds]
   );
 
-  // Start with root ancestors (convert to numbers since roots table stores as strings)
-  let visibleIds = new Set();
+  // Add root ancestors (convert to numbers since roots table stores as strings)
   for (let root of roots) {
     if (root.father_id) visibleIds.add(Number(root.father_id));
     if (root.mother_id) visibleIds.add(Number(root.mother_id));
@@ -664,7 +681,10 @@ async function loadFamilyIds(session, soft = true) {
 async function loadVisiblePeopleIds(session, soft = true) {
   if (session.visible_people_ids && soft) return;
   await loadFamilyIds(session, soft);
-  session.visible_people_ids = await getVisiblePeopleIds(session.family_ids);
+  session.visible_people_ids = await getVisiblePeopleIds(
+    session.family_ids,
+    session.google_data.email
+  );
 }
 
 exports.onlogin = async function (session) {
