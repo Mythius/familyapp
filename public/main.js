@@ -1,5 +1,19 @@
 const $ = (q) => document.querySelector(q);
 let permissions;
+
+// Check if user can edit a specific family
+function canEditFamily(familyId) {
+  if (!permissions || !permissions.family_permissions) return false;
+  const role = permissions.family_permissions[familyId];
+  return role === "owner" || role === "editor";
+}
+
+// Check if user owns a specific family
+function isOwner(familyId) {
+  if (!permissions || !permissions.family_permissions) return false;
+  return permissions.family_permissions[familyId] === "owner";
+}
+
 async function signin() {
   let data = await googleAuth();
   let token = await data.loginSuccess;
@@ -85,13 +99,21 @@ function gotoCalendar() {
 function createFamilyDiv(families) {
   let innerHTML = "";
   for (let family of families) {
+    const familyId = family.family_id;
+    const role = permissions?.family_permissions?.[familyId] || "viewer";
+    const roleLabel = role === "owner" ? "Owner" : role === "editor" ? "Editor" : "Viewer";
+
     innerHTML += /*html*/ `
-    <div name="${family.family_id}" onclick="updateFamilyRoot(this)" class="fam-id-span">
-      <span class="familyName">${family.family_id}</span>
-      <br>
-      Descendants and Family of
-      ${family.ancestor1} &
-      ${family.ancestor2}
+    <div class="fam-id-span">
+      <div name="${familyId}" onclick="updateFamilyRoot(this)" style="cursor:pointer">
+        <span class="familyName">${familyId}</span>
+        <span class="role-badge ${role}">${roleLabel}</span>
+        <br>
+        Descendants and Family of
+        ${family.ancestor1 || "?"} &
+        ${family.ancestor2 || "?"}
+      </div>
+      ${role === "owner" ? `<button onclick="event.stopPropagation(); managePermissions('${familyId}')" class="manage-btn">Manage Access</button>` : ""}
     </div>
   `;
   }
@@ -223,7 +245,8 @@ async function handleClick(name) {
 }
 
 function addEditButton(profile) {
-  if (permissions && permissions.role === "admin") {
+  // Check if user can edit this person's family
+  if (canEditFamily(profile.family_id)) {
     let submitBtn = $("#submit-btn");
     let editBtn = $("#edit-btn");
     let cancelBtn = $("#cancel-btn");
@@ -572,6 +595,102 @@ window.addEventListener("popstate", function (event) {
   // Call your custom function
   gotoSearch();
 });
+
+// Manage family permissions modal
+async function managePermissions(familyId) {
+  let modal = $("#permissions_modal");
+  if (!modal) {
+    // Create modal if it doesn't exist
+    modal = document.createElement("div");
+    modal.id = "permissions_modal";
+    modal.className = "modal";
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h2>Manage Access: ${familyId}</h2>
+      <div id="permissions_list">Loading...</div>
+      <hr>
+      <h3>Grant Access</h3>
+      <input type="email" id="grant_email" placeholder="Email address" />
+      <select id="grant_role">
+        <option value="editor">Editor (can edit)</option>
+        <option value="viewer">Viewer (read only)</option>
+      </select>
+      <button onclick="grantPermission('${familyId}')">Grant Access</button>
+      <hr>
+      <button onclick="closePermissionsModal()">Close</button>
+    </div>
+  `;
+  modal.classList.remove("hidden");
+
+  // Load current permissions
+  try {
+    let members = await request(`/family-permissions/${encodeURIComponent(familyId)}`);
+    let listHtml = "";
+    if (members.length === 0) {
+      listHtml = "<p>No additional users have access.</p>";
+    } else {
+      listHtml = "<ul>";
+      for (let m of members) {
+        listHtml += `<li>${m.email} - ${m.role} <button onclick="revokePermission('${familyId}', '${m.email}')">Revoke</button></li>`;
+      }
+      listHtml += "</ul>";
+    }
+    $("#permissions_list").innerHTML = listHtml;
+  } catch (e) {
+    $("#permissions_list").innerHTML = "<p>Error loading permissions.</p>";
+  }
+}
+
+function closePermissionsModal() {
+  $("#permissions_modal").classList.add("hidden");
+}
+
+async function grantPermission(familyId) {
+  let email = $("#grant_email").value.trim();
+  let role = $("#grant_role").value;
+
+  if (!email) {
+    alert("Please enter an email address.");
+    return;
+  }
+
+  try {
+    let result = await request(`/family-permissions/${encodeURIComponent(familyId)}`, {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    });
+    if (result.success) {
+      alert(result.message);
+      $("#grant_email").value = "";
+      managePermissions(familyId); // Refresh the list
+    } else {
+      alert(result.error || "Failed to grant permission.");
+    }
+  } catch (e) {
+    alert("Error granting permission.");
+  }
+}
+
+async function revokePermission(familyId, email) {
+  if (!confirm(`Revoke access from ${email}?`)) return;
+
+  try {
+    let result = await request(`/family-permissions/${encodeURIComponent(familyId)}/${encodeURIComponent(email)}`, {
+      method: "DELETE",
+    });
+    if (result.success) {
+      alert(result.message);
+      managePermissions(familyId); // Refresh the list
+    } else {
+      alert(result.error || "Failed to revoke permission.");
+    }
+  } catch (e) {
+    alert("Error revoking permission.");
+  }
+}
 
 // main();
 skipSignin();

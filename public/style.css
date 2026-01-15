@@ -243,3 +243,88 @@ button {
 #tree{
   overflow: hidden;
 }
+
+/* Role badges */
+.role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.8em;
+  margin-left: 8px;
+}
+
+.role-badge.owner {
+  background-color: #28a745;
+  color: white;
+}
+
+.role-badge.editor {
+  background-color: #ffc107;
+  color: black;
+}
+
+.role-badge.viewer {
+  background-color: #6c757d;
+  color: white;
+}
+
+.manage-btn {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.9em;
+  padding: 5px 10px;
+}
+
+/* Permissions modal */
+#permissions_modal {
+  width: 60%;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  border: 3px solid black;
+  align-items: center;
+  left: 50%;
+  position: fixed;
+  top: 50%;
+  background-color: white;
+  border-radius: 20px;
+  box-sizing: border-box;
+  padding: 20px;
+  gap: 10px;
+  transform: translate(-50%, -50%);
+  box-shadow: black 10px 10px 20px;
+  z-index: 100;
+  max-height: 80%;
+  overflow-y: auto;
+}
+
+#permissions_modal .modal-content {
+  width: 100%;
+  text-align: center;
+}
+
+#permissions_modal input[type="email"] {
+  width: 60%;
+  margin: 5px;
+}
+
+#permissions_modal select {
+  width: auto;
+  margin: 5px;
+}
+
+#permissions_modal ul {
+  list-style: none;
+  padding: 0;
+}
+
+#permissions_modal li {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+#permissions_modal li button {
+  background-color: #dc3545;
+  padding: 3px 8px;
+  font-size: 0.8em;
+}
