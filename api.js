@@ -615,16 +615,15 @@ async function getVisiblePeopleIds(familyIds, email) {
 
   let visibleIds = new Set();
 
-  // First, add all people from families the user owns or has edit access to
+  // First, add all people from families the user owns or has edit/view access to
   // This ensures owners can always see everyone in their families, even without roots
   if (email) {
     let permissions = await getFamilyPermissions(email);
-    let editableFamilyIds = Object.entries(permissions)
-      .filter(([_, role]) => role === "owner" || role === "editor")
+    let accessibleFamilyIds = Object.entries(permissions)
       .map(([fid, _]) => fid);
 
     for (let person of all_people) {
-      if (person.family_id && editableFamilyIds.includes(person.family_id)) {
+      if (person.family_id && accessibleFamilyIds.includes(person.family_id)) {
         visibleIds.add(person.ID);
       }
     }
