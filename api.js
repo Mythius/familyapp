@@ -238,6 +238,8 @@ exports.private = function (app) {
 
     try {
       await db.query("family_db", sql, values);
+      // Refresh session cache so new person is immediately visible
+      await loadVisiblePeopleIds(req.session, false);
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
