@@ -476,6 +476,17 @@ async function getDescendantIds(personId) {
   let descendantIds = new Set([personId]);
   let toProcess = new Set([personId]);
 
+  // Include the selected person's spouse(s)
+  let selectedPerson = all_people.find((p) => p.ID === personId);
+  if (selectedPerson && selectedPerson.spouse_id) {
+    descendantIds.add(selectedPerson.spouse_id);
+  }
+  // Also find anyone who has the selected person as their spouse
+  let spousesOfSelected = all_people.filter((p) => p.spouse_id === personId);
+  for (let spouse of spousesOfSelected) {
+    descendantIds.add(spouse.ID);
+  }
+
   while (toProcess.size > 0) {
     let currentId = toProcess.values().next().value;
     toProcess.delete(currentId);
