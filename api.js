@@ -301,12 +301,17 @@ exports.private = function (app) {
         .json({ error: "At least 1 ancestor must be specified" });
     }
 
-    let data = await db.query(
-      "family_db",
-      "insert into roots (family_id,father_id,mother_id) values (?,?,?)",
-      [familyId, body.father_id, body.mother_id]
-    );
-    return res.json(data);
+    try {
+      let data = await db.query(
+        "family_db",
+        "insert into roots (family_id,father_id,mother_id) values (?,?,?)",
+        [familyId, body.father_id, body.mother_id]
+      );
+      return res.json({ success: true, data });
+    } catch (e) {
+      console.error("Error adding roots:", e);
+      return res.status(500).json({ error: "Error adding roots: " + e.message });
+    }
   });
 
   app.get("/family_ids", async (req, res) => {
