@@ -257,17 +257,31 @@ exports.private = function (app) {
 
   app.post("/family/:id", async (req, res) => {
     let family_id = req.params.id;
+
+    // Check if family name already exists
+    let existing = await db.query(
+      "family_db",
+      "select family_id from owned_families where family_id = ?",
+      [family_id]
+    );
+    if (existing.length > 0) {
+      return res.status(400).json({ error: "A family with this name already exists. Please choose a unique name." });
+    }
+
     try {
       let data = await db.query(
         "family_db",
         "insert into owned_families (email,family_id) VALUES (?,?)",
         [req.session.google_data.email, family_id]
       );
+      // Refresh session caches so user can immediately edit their new family
       await loadFamilyIds(req.session, false);
-      res.json(data);
+      await loadVisiblePeopleIds(req.session, false);
+      req.session.family_permissions = await getFamilyPermissions(req.session.google_data.email);
+      res.json({ success: true, family_id });
       return;
     } catch (e) {
-      res.status(500).json({ error: "Error Adding Root" });
+      res.status(500).json({ error: "Error Adding Family" });
       return;
     }
   });

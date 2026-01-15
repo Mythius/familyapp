@@ -178,7 +178,39 @@ async function addFamily() {
     "Enter New Family Name (we recommend just last name)"
   );
   if (!familyName) return;
-  await request(`/family/${familyName}`, { method: "POST" });
+  let result = await request(`/family/${encodeURIComponent(familyName)}`, { method: "POST" });
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  // Refresh permissions and people list since we now own a new family
+  permissions = await request("/permissions");
+  all_people = await request("/people");
+  names = all_people
+    .filter((e, i) => i > 0)
+    .map((row) => {
+      return { name: row[2] };
+    });
+  // Update family dropdowns
+  let familyIds = await request("/family_ids");
+  if (!familyIds.error) {
+    let familyIdSelect = $("#family-id");
+    familyIdSelect.innerHTML = "";
+    familyIds.forEach((familyId) => {
+      let option = document.createElement("option");
+      option.value = familyId;
+      option.textContent = familyId;
+      familyIdSelect.appendChild(option);
+    });
+    let tree_select = $("#tree-family-select");
+    tree_select.innerHTML = "";
+    familyIds.forEach((familyId) => {
+      let option = document.createElement("option");
+      option.value = familyId;
+      option.textContent = familyId;
+      tree_select.appendChild(option);
+    });
+  }
   gotoSettings();
 }
 
@@ -575,12 +607,24 @@ $("#create-person").onclick = async () => {
       return;
     }
     // Create new person
-    await request("/people", {
+    let result = await request("/people", {
       method: "POST",
       body: JSON.stringify({ name: nameInput, family_id: familyId }),
     });
+    if (result.error) {
+      alert(result.error);
+      return;
+    }
     modal.classList.add("hidden");
-    main(); // Refresh the table
+    // Refresh people list and permissions
+    permissions = await request("/permissions");
+    all_people = await request("/people");
+    names = all_people
+      .filter((e, i) => i > 0)
+      .map((row) => {
+        return { name: row[2] };
+      });
+    renderTable(names);
   };
   $("#new-person-cancel").onclick = () => {
     modal.classList.add("hidden");
