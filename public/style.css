@@ -328,3 +328,290 @@ button {
   padding: 3px 8px;
   font-size: 0.8em;
 }
+
+/* Filters Tab - Mobile First */
+#filters {
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+#filters h1 {
+  text-align: center;
+  margin: 0 0 15px 0;
+  font-size: 1.5rem;
+}
+
+.filters-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.filter-section {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.filter-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.filter-section select,
+.filter-section input[type="number"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ced4da;
+  border-radius: 5px;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.age-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.age-range input {
+  flex: 1;
+  min-width: 0;
+}
+
+.age-range span {
+  color: #6c757d;
+  flex-shrink: 0;
+}
+
+.filter-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.filter-actions button {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.secondary-btn {
+  background-color: #6c757d;
+}
+
+.secondary-btn:hover {
+  background-color: #5a6268;
+}
+
+.filter-results {
+  margin-bottom: 20px;
+}
+
+.filter-results h3 {
+  margin: 0 0 10px 0;
+  font-size: 1rem;
+  color: #495057;
+}
+
+#filter-table {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.export-section {
+  padding: 15px;
+  background: #e7f3ff;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.export-section h3 {
+  margin: 0 0 10px 0;
+  font-size: 1rem;
+  color: #0056b3;
+}
+
+.export-section button {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* Tablet and larger screens */
+@media (min-width: 600px) {
+  .filters-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+  }
+
+  .filter-actions {
+    grid-column: span 2;
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .filter-actions button {
+    width: auto;
+    min-width: 150px;
+  }
+
+  .export-section button {
+    width: auto;
+    min-width: 200px;
+  }
+}
+
+/* Desktop screens */
+@media (min-width: 900px) {
+  .filters-container {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .filter-actions {
+    grid-column: span 3;
+  }
+
+  #filter-table {
+    max-height: 400px;
+  }
+}
+
+/* Calendar Tab - Mobile First */
+#calendar {
+  width: 95%;
+  padding: 5px;
+  box-sizing: border-box;
+}
+
+#calendar > span {
+  font-size: 1.5rem;
+  padding: 10px;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#monthlabel {
+  font-size: 1.2rem;
+  min-width: 120px;
+  text-align: center;
+}
+
+#month {
+  font-size: 0.7rem;
+}
+
+.day {
+  min-height: 60px;
+  padding: 2px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.day .person-tag {
+  font-size: 0.6rem;
+  padding: 2px 4px;
+  margin: 1px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tree Tab - Mobile First */
+#tree {
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+#tree-family-select {
+  width: 100%;
+  padding: 10px;
+  font-size: 1rem;
+  margin-bottom: 10px;
+  border-radius: 5px;
+}
+
+#tree_display {
+  flex: 1;
+  touch-action: none;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background: #fafafa;
+}
+
+/* Tablet and larger for calendar */
+@media (min-width: 600px) {
+  #calendar {
+    width: 90%;
+  }
+
+  #month {
+    font-size: 0.85rem;
+  }
+
+  .day {
+    min-height: 80px;
+    padding: 4px;
+  }
+
+  .day .person-tag {
+    font-size: 0.75rem;
+    padding: 3px 6px;
+  }
+
+  #monthlabel {
+    font-size: 1.4rem;
+  }
+}
+
+/* Desktop for calendar */
+@media (min-width: 900px) {
+  #calendar {
+    width: 80%;
+  }
+
+  #month {
+    font-size: 1rem;
+  }
+
+  .day {
+    min-height: 100px;
+    padding: 5px;
+  }
+
+  .day .person-tag {
+    font-size: 0.85rem;
+    padding: 5px 10px;
+    display: inline-block;
+  }
+}
+
+/* Tablet and larger for tree */
+@media (min-width: 600px) {
+  #tree {
+    width: 95%;
+  }
+
+  #tree-family-select {
+    width: auto;
+    min-width: 200px;
+    align-self: flex-start;
+  }
+}
+
+@media (min-width: 900px) {
+  #tree {
+    width: 90%;
+  }
+}

@@ -264,8 +264,22 @@
     ctx.fillText(name, x + 5, y + 25);
   }
 
-  // Detect click on person box
+  // Mouse drag support for laptop/desktop
+  let isDragging = false;
+  let wasDragging = false;
+  let lastMouseX = 0;
+  let lastMouseY = 0;
+  let dragStartX = 0;
+  let dragStartY = 0;
+
+  // Detect click on person box (only if not dragging)
   canvas.addEventListener("click", (e) => {
+    // Ignore click if we just finished dragging
+    if (wasDragging) {
+      wasDragging = false;
+      return;
+    }
+
     const rect = canvas.getBoundingClientRect();
     const mouseX = (e.clientX - rect.left - offsetX) / scale;
     const mouseY = (e.clientY - rect.top - offsetY) / scale;
@@ -286,6 +300,63 @@
   function onPersonClick(name) {
     handleClick(name);
   }
+
+  // Mouse wheel zoom support for laptop/desktop
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Zoom in or out based on scroll direction
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    zoomAt(mouseX, mouseY, zoomFactor);
+  }, { passive: false });
+
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button === 0) { // Left click
+      isDragging = true;
+      wasDragging = false;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      canvas.style.cursor = "grabbing";
+    }
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (isDragging) {
+      const dx = e.clientX - lastMouseX;
+      const dy = e.clientY - lastMouseY;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+
+      // Check if we've moved enough to consider it a drag
+      const totalDx = e.clientX - dragStartX;
+      const totalDy = e.clientY - dragStartY;
+      if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
+        wasDragging = true;
+      }
+
+      pan(dx, dy);
+    }
+  });
+
+  canvas.addEventListener("mouseup", (e) => {
+    if (e.button === 0) {
+      isDragging = false;
+      canvas.style.cursor = "grab";
+    }
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    isDragging = false;
+    canvas.style.cursor = "grab";
+  });
+
+  // Set initial cursor style
+  canvas.style.cursor = "grab";
 
   const TREE_DIAGRAM = {};
 

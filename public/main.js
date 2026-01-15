@@ -736,5 +736,173 @@ async function revokePermission(familyId, email) {
   }
 }
 
+// Filters functionality
+let filteredPeople = [];
+
+function gotoFilters() {
+  hideAll();
+  $("#filters").classList.remove("out");
+  populateFilterFamilyDropdown();
+  applyFilters();
+}
+
+function populateFilterFamilyDropdown() {
+  let familySelect = $("#filter-family");
+  let currentValue = familySelect.value;
+
+  // Get unique family IDs from all_people
+  let families = [...new Set(all_people.filter((e, i) => i > 0).map(p => p[1]))];
+
+  familySelect.innerHTML = '<option value="">All Families</option>';
+  families.forEach(familyId => {
+    let option = document.createElement("option");
+    option.value = familyId;
+    option.textContent = familyId;
+    familySelect.appendChild(option);
+  });
+
+  // Restore previous selection if valid
+  if (currentValue && families.includes(currentValue)) {
+    familySelect.value = currentValue;
+  }
+}
+
+function applyFilters() {
+  let familyFilter = $("#filter-family").value;
+  let genderFilter = $("#filter-gender").value;
+  let statusFilter = $("#filter-status").value;
+  let ageMinFilter = $("#filter-age-min").value;
+  let ageMaxFilter = $("#filter-age-max").value;
+  let hasBirthdayFilter = $("#filter-has-birthday").value;
+
+  // all_people structure: [ID, family_id, name, address, phone, email, gender, marriage_date, birthday, death_date, ...]
+  filteredPeople = all_people.filter((person, index) => {
+    if (index === 0) return false; // Skip header row
+
+    let familyId = person[1];
+    let name = person[2];
+    let gender = person[6];
+    let birthday = person[8];
+    let deathDate = person[9];
+
+    // Family filter
+    if (familyFilter && familyId !== familyFilter) return false;
+
+    // Gender filter
+    if (genderFilter && gender !== genderFilter) return false;
+
+    // Status filter (alive/deceased)
+    if (statusFilter === "alive" && deathDate) return false;
+    if (statusFilter === "deceased" && !deathDate) return false;
+
+    // Has birthday filter
+    if (hasBirthdayFilter === "yes" && !birthday) return false;
+    if (hasBirthdayFilter === "no" && birthday) return false;
+
+    // Age filter (only applies if person has a birthday)
+    if ((ageMinFilter || ageMaxFilter) && birthday) {
+      let age = Math.floor((new Date() - new Date(birthday)) / 31536000000);
+      if (ageMinFilter && age < parseInt(ageMinFilter)) return false;
+      if (ageMaxFilter && age > parseInt(ageMaxFilter)) return false;
+    } else if ((ageMinFilter || ageMaxFilter) && !birthday) {
+      // If age filter is set but no birthday, exclude
+      return false;
+    }
+
+    return true;
+  });
+
+  renderFilterResults();
+}
+
+function renderFilterResults() {
+  let table = $("#filter-table");
+  let countSpan = $("#filter-count");
+
+  table.innerHTML = "";
+  countSpan.textContent = filteredPeople.length;
+
+  filteredPeople.forEach(person => {
+    let row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<div class="cell">${person[2]}</div>`;
+    row.onclick = () => handleClick(person[2]);
+    table.appendChild(row);
+  });
+}
+
+function clearFilters() {
+  $("#filter-family").value = "";
+  $("#filter-gender").value = "";
+  $("#filter-status").value = "";
+  $("#filter-age-min").value = "";
+  $("#filter-age-max").value = "";
+  $("#filter-has-birthday").value = "";
+  applyFilters();
+}
+
+function exportToCSV() {
+  if (filteredPeople.length === 0) {
+    alert("No data to export. Please apply filters first.");
+    return;
+  }
+
+  // CSV headers
+  let headers = ["ID", "Family", "Name", "Address", "Phone", "Email", "Gender", "Marriage Date", "Birthday", "Death Date", "Maiden Name"];
+
+  // Build CSV content
+  let csvContent = headers.join(",") + "\n";
+
+  filteredPeople.forEach(person => {
+    let row = [
+      person[0] || "",           // ID
+      person[1] || "",           // Family ID
+      escapeCSV(person[2] || ""), // Name
+      escapeCSV(person[3] || ""), // Address
+      escapeCSV(person[4] || ""), // Phone
+      escapeCSV(person[5] || ""), // Email
+      person[6] || "",           // Gender
+      formatDateForCSV(person[7]), // Marriage Date
+      formatDateForCSV(person[8]), // Birthday
+      formatDateForCSV(person[9]), // Death Date
+      escapeCSV(person[10] || "") // Maiden Name
+    ];
+    csvContent += row.join(",") + "\n";
+  });
+
+  // Create and trigger download
+  let blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  let link = document.createElement("a");
+  let url = URL.createObjectURL(blob);
+
+  link.setAttribute("href", url);
+  link.setAttribute("download", `family_export_${new Date().toISOString().slice(0, 10)}.csv`);
+  link.style.visibility = "hidden";
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function escapeCSV(str) {
+  if (str == null) return "";
+  str = String(str);
+  // If contains comma, quote, or newline, wrap in quotes and escape existing quotes
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+function formatDateForCSV(dateStr) {
+  if (!dateStr) return "";
+  try {
+    let date = new Date(dateStr);
+    return date.toISOString().slice(0, 10);
+  } catch {
+    return "";
+  }
+}
+
 // main();
 skipSignin();
