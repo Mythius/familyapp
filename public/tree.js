@@ -308,8 +308,9 @@
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    // Zoom in or out based on scroll direction
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    // Zoom in or out based on scroll direction (reduced sensitivity)
+    // Use smaller zoom factor for smoother trackpad experience
+    const zoomFactor = e.deltaY < 0 ? 1.03 : 0.97;
     zoomAt(mouseX, mouseY, zoomFactor);
   }, { passive: false });
 
@@ -339,7 +340,8 @@
         wasDragging = true;
       }
 
-      pan(dx, dy);
+      // Apply damping for smoother pan (reduced sensitivity)
+      pan(dx * 0.7, dy * 0.7);
     }
   });
 
