@@ -48,8 +48,8 @@ exports.private = function (app) {
         p3.ID AS mother_id,
         s.names AS spouse_names,
         s.IDs AS spouse_ids,
-        c.names AS children_names,
-        c.IDs AS children_ids
+        group_concat(c.names) AS children_names,
+        group_concat(c.IDs) AS children_ids
       FROM people p1
       LEFT JOIN people p2 ON p1.father_id = p2.ID
       LEFT JOIN people p3 ON p1.mother_id = p3.ID
