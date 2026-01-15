@@ -464,61 +464,90 @@ exports.private = function (app) {
       return res.status(403).json({ error: "You don't have access to this person" });
     }
 
-    let descendantIds = await getDescendantIds(personId);
-    return res.json(descendantIds);
+    let descendantsWithGenerations = await getDescendantsWithGenerations(personId);
+    return res.json(descendantsWithGenerations);
   });
 };
 
-// Get all descendants of a person (including spouses of descendants)
-async function getDescendantIds(personId) {
+// Get all descendants with generation numbers
+// Generation format: 1 = root/spouse, 2 = children, 2.1 = child's 1st spouse, 2.2 = 2nd spouse, 3 = grandchildren, etc.
+async function getDescendantsWithGenerations(personId) {
   let all_people = await db.query("family_db", "select * from people");
 
-  let descendantIds = new Set([personId]);
-  let toProcess = new Set([personId]);
+  // Map of personId -> generation string
+  let generations = new Map();
 
-  // Include the selected person's spouse(s)
+  // Track which IDs we've processed as blood descendants (not spouses)
+  let bloodDescendants = new Set([personId]);
+
+  // Set root person as generation 1
+  generations.set(personId, "1");
+
+  // Add root person's spouse(s) as generation 1
   let selectedPerson = all_people.find((p) => p.ID === personId);
   if (selectedPerson && selectedPerson.spouse_id) {
-    descendantIds.add(Number(selectedPerson.spouse_id));
+    let spouseId = Number(selectedPerson.spouse_id);
+    generations.set(spouseId, "1");
   }
   // Also find anyone who has the selected person as their spouse
   let spousesOfSelected = all_people.filter((p) => Number(p.spouse_id) === personId);
   for (let spouse of spousesOfSelected) {
-    descendantIds.add(spouse.ID);
+    generations.set(spouse.ID, "1");
   }
 
-  while (toProcess.size > 0) {
-    let currentId = toProcess.values().next().value;
-    toProcess.delete(currentId);
+  // BFS to traverse descendants generation by generation
+  let currentGeneration = [personId];
+  let genNumber = 1;
 
-    // Find children (people whose father_id or mother_id is currentId)
-    let children = all_people.filter(
-      (p) => p.father_id === currentId || p.mother_id === currentId
-    );
+  while (currentGeneration.length > 0) {
+    genNumber++;
+    let nextGeneration = [];
 
-    for (let child of children) {
-      if (!descendantIds.has(child.ID)) {
-        descendantIds.add(child.ID);
-        toProcess.add(child.ID);
-      }
-      // Also add the child's spouse(s) - check both directions
-      if (child.spouse_id) {
-        let spouseId = Number(child.spouse_id);
-        if (!descendantIds.has(spouseId)) {
-          descendantIds.add(spouseId);
-        }
-      }
-      // Check if anyone has this child as their spouse (reverse direction)
-      let childSpouses = all_people.filter((p) => Number(p.spouse_id) === child.ID);
-      for (let spouse of childSpouses) {
-        if (!descendantIds.has(spouse.ID)) {
-          descendantIds.add(spouse.ID);
+    for (let parentId of currentGeneration) {
+      // Find children (people whose father_id or mother_id is parentId)
+      let children = all_people.filter(
+        (p) => p.father_id === parentId || p.mother_id === parentId
+      );
+
+      for (let child of children) {
+        if (!bloodDescendants.has(child.ID)) {
+          bloodDescendants.add(child.ID);
+          generations.set(child.ID, String(genNumber));
+          nextGeneration.push(child.ID);
+
+          // Find all spouses of this child and assign decimal generations
+          let spouseCount = 0;
+
+          // Check child's spouse_id field
+          if (child.spouse_id) {
+            let spouseId = Number(child.spouse_id);
+            if (!generations.has(spouseId)) {
+              spouseCount++;
+              generations.set(spouseId, `${genNumber}.${spouseCount}`);
+            }
+          }
+
+          // Check if anyone has this child as their spouse (reverse direction)
+          let childSpouses = all_people.filter((p) => Number(p.spouse_id) === child.ID);
+          for (let spouse of childSpouses) {
+            if (!generations.has(spouse.ID)) {
+              spouseCount++;
+              generations.set(spouse.ID, `${genNumber}.${spouseCount}`);
+            }
+          }
         }
       }
     }
+
+    currentGeneration = nextGeneration;
   }
 
-  return Array.from(descendantIds);
+  // Return as object mapping ID -> generation
+  let result = {};
+  for (let [id, gen] of generations) {
+    result[id] = gen;
+  }
+  return result;
 }
 
 async function getSecurityDetails(email) {

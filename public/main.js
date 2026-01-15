@@ -738,12 +738,12 @@ async function revokePermission(familyId, email) {
 
 // Filters functionality
 let filteredPeople = [];
-let descendantIds = null; // Cached descendant IDs for current filter
+let descendantIds = null; // Cached descendant IDs for current filter (array of IDs)
+let descendantGenerations = null; // Map of ID -> generation string when descendant filter is active
 
 function gotoFilters() {
   hideAll();
   $("#filters").classList.remove("out");
-  populateFilterFamilyDropdown();
   setupDescendantSearch();
   applyFilters();
 }
@@ -799,9 +799,12 @@ async function selectDescendantAncestor(name) {
   $("#clear-descendant").style.display = "inline";
   $("#descendant-search-results").style.display = "none";
 
-  // Fetch descendants from backend
+  // Fetch descendants with generation data from backend
   try {
-    descendantIds = await request(`/descendants/${personId}`);
+    let data = await request(`/descendants/${personId}`);
+    // data is now an object: { id: generation, ... }
+    descendantGenerations = data;
+    descendantIds = Object.keys(data).map(id => parseInt(id));
     applyFilters();
   } catch (e) {
     alert("Error fetching descendants");
@@ -816,54 +819,29 @@ function clearDescendantFilter() {
   $("#filter-descendant-name").textContent = "";
   $("#clear-descendant").style.display = "none";
   descendantIds = null;
+  descendantGenerations = null;
   applyFilters();
 }
 
-function populateFilterFamilyDropdown() {
-  let familySelect = $("#filter-family");
-  let currentValue = familySelect.value;
-
-  // Get unique family IDs from all_people
-  let families = [...new Set(all_people.filter((e, i) => i > 0).map(p => p[1]))];
-
-  familySelect.innerHTML = '<option value="">All Families</option>';
-  families.forEach(familyId => {
-    let option = document.createElement("option");
-    option.value = familyId;
-    option.textContent = familyId;
-    familySelect.appendChild(option);
-  });
-
-  // Restore previous selection if valid
-  if (currentValue && families.includes(currentValue)) {
-    familySelect.value = currentValue;
-  }
-}
 
 function applyFilters() {
-  let familyFilter = $("#filter-family").value;
   let genderFilter = $("#filter-gender").value;
   let statusFilter = $("#filter-status").value;
   let ageMinFilter = $("#filter-age-min").value;
   let ageMaxFilter = $("#filter-age-max").value;
   let hasBirthdayFilter = $("#filter-has-birthday").value;
 
-  // all_people structure: [ID, family_id, name, address, phone, email, gender, marriage_date, birthday, death_date, ...]
+  // all_people structure: [ID, family_id, name, gender, address, phone, email, generation, birthday, mother_id, father_id, spouse_id, marriage_date, death_date, ...]
   filteredPeople = all_people.filter((person, index) => {
     if (index === 0) return false; // Skip header row
 
     let personId = person[0];
-    let familyId = person[1];
-    let name = person[2];
     let gender = person[3];
     let birthday = person[8];
     let deathDate = person[13];
 
     // Descendants filter - if set, only show people in the descendant list
     if (descendantIds && !descendantIds.includes(personId)) return false;
-
-    // Family filter
-    if (familyFilter && familyId !== familyFilter) return false;
 
     // Gender filter
     if (genderFilter && gender !== genderFilter) return false;
@@ -909,7 +887,6 @@ function renderFilterResults() {
 }
 
 function clearFilters() {
-  $("#filter-family").value = "";
   $("#filter-gender").value = "";
   $("#filter-status").value = "";
   $("#filter-age-min").value = "";
@@ -927,12 +904,26 @@ function exportToCSV() {
   // Use the header row from all_people (first row contains column names)
   let headers = all_people[0];
 
+  // Find the generation column index
+  let generationColIndex = headers.indexOf("generation");
+
   // Build CSV content
   let csvContent = headers.map(h => escapeCSV(h)).join(",") + "\n";
 
   filteredPeople.forEach(person => {
-    let row = person.map(val => escapeCSV(val));
-    csvContent += row.join(",") + "\n";
+    // Clone the person array so we don't modify the original
+    let row = [...person];
+
+    // If descendant filter is active, overwrite the generation column with computed value
+    if (descendantGenerations && generationColIndex !== -1) {
+      let personId = row[0]; // ID is first column
+      let computedGeneration = descendantGenerations[personId];
+      if (computedGeneration !== undefined) {
+        row[generationColIndex] = computedGeneration;
+      }
+    }
+
+    csvContent += row.map(val => escapeCSV(val)).join(",") + "\n";
   });
 
   // Create and trigger download
