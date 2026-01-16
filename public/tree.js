@@ -96,8 +96,9 @@
     }
   }
 
-  // Build layout - BOTTOM-UP approach for dense families
-  // First layout the lowest generation, then work upward positioning parents above children
+  // Build layout - TWO-PASS approach for multi-generation families
+  // Pass 1: Sort all generations TOP-DOWN to establish correct ordering
+  // Pass 2: Layout BOTTOM-UP using the established order
   function buildLayout() {
     const positions = new Map();
 
@@ -114,45 +115,58 @@
 
     // Sort generations (ascending)
     const sortedGens = [...genGroups.keys()].sort((a, b) => a - b);
+    const minGen = sortedGens[0];
     const maxGen = sortedGens[sortedGens.length - 1];
 
-    // Build parent-to-children map
-    const childrenByParent = new Map();
-    for (const person of people) {
-      if (person.generation.includes(".")) continue; // Skip spouses
+    // Helper to get all spouses of a person (handles multiple spouses)
+    function getSpouses(person) {
+      const spouses = [];
+      const personGen = Math.floor(parseFloat(person.generation));
 
-      const parentKey = `${person.father_id || 0}-${person.mother_id || 0}`;
-      if (!childrenByParent.has(parentKey)) {
-        childrenByParent.set(parentKey, []);
+      // Check person's spouse_id
+      if (person.spouse_id && peopleMap[person.spouse_id]) {
+        const spouse = peopleMap[person.spouse_id];
+        if (Math.floor(parseFloat(spouse.generation)) === personGen) {
+          spouses.push(spouse);
+        }
       }
-      childrenByParent.get(parentKey).push(person);
+
+      // Check if anyone has this person as their spouse (reverse lookup for multiple spouses)
+      for (const p of people) {
+        if (p.id === person.id) continue;
+        if (Math.floor(parseFloat(p.generation)) !== personGen) continue;
+        if (p.spouse_id === person.id && !spouses.find(s => s.id === p.id)) {
+          spouses.push(p);
+        }
+      }
+
+      return spouses;
     }
 
-    // Helper to create units (couples or singles) from a list of people
-    function createUnits(peopleList) {
+    // Helper to create units (blood relative + all their spouses)
+    function createUnits(orderedBloodDescendants) {
       const placed = new Set();
       const units = [];
 
-      for (const person of peopleList) {
+      for (const person of orderedBloodDescendants) {
         if (placed.has(person.id)) continue;
+        if (person.generation.includes(".")) continue; // Skip spouses in this loop
 
-        const spouse = person.spouse_id ? peopleMap[person.spouse_id] : null;
-        const personGen = Math.floor(parseFloat(person.generation));
-        const spouseInSameGen = spouse && Math.floor(parseFloat(spouse.generation)) === personGen;
+        placed.add(person.id);
 
-        if (spouseInSameGen && !placed.has(spouse.id)) {
-          // Couple - blood relative first
-          const personIsBlood = !person.generation.includes(".");
-          if (personIsBlood) {
-            units.push({ type: "couple", person1: person, person2: spouse, width: NODE_WIDTH * 2 + SPOUSE_GAP });
-          } else {
-            units.push({ type: "couple", person1: spouse, person2: person, width: NODE_WIDTH * 2 + SPOUSE_GAP });
-          }
-          placed.add(person.id);
-          placed.add(spouse.id);
+        // Get all spouses for this person
+        const spouses = getSpouses(person).filter(s => !placed.has(s.id));
+
+        if (spouses.length > 0) {
+          // Mark all spouses as placed
+          spouses.forEach(s => placed.add(s.id));
+
+          // Create unit with blood relative first, then spouses
+          const allInUnit = [person, ...spouses];
+          const width = allInUnit.length * NODE_WIDTH + (allInUnit.length - 1) * SPOUSE_GAP;
+          units.push({ type: "family", members: allInUnit, width });
         } else {
           units.push({ type: "single", person: person, width: NODE_WIDTH });
-          placed.add(person.id);
         }
       }
 
@@ -164,68 +178,79 @@
       return unit.width + HORIZONTAL_SPACING;
     }
 
-    // Helper to sort people by their parents (so siblings stay together)
-    // Only sort blood descendants - spouses will be paired with them in createUnits
-    function sortByParents(peopleList) {
-      // Separate blood descendants from spouses
-      const bloodDescendants = peopleList.filter(p => !p.generation.includes("."));
-      const spouses = peopleList.filter(p => p.generation.includes("."));
+    // ============================================
+    // PASS 1: TOP-DOWN SORT to establish order
+    // ============================================
+    // This creates a canonical ordering for each generation based on parent order
 
-      // Sort blood descendants by their parents
-      bloodDescendants.sort((a, b) => {
-        const aFather = a.father_id || 0;
-        const bFather = b.father_id || 0;
-        if (aFather !== bFather) return aFather - bFather;
+    const orderedByGen = new Map(); // gen -> ordered list of blood descendants
 
-        const aMother = a.mother_id || 0;
-        const bMother = b.mother_id || 0;
-        if (aMother !== bMother) return aMother - bMother;
+    for (const gen of sortedGens) {
+      const peopleInGen = genGroups.get(gen) || [];
+      const bloodDescendants = peopleInGen.filter(p => !p.generation.includes("."));
 
-        return a.id - b.id;
-      });
+      if (gen === minGen) {
+        // First generation: just sort by id
+        bloodDescendants.sort((a, b) => a.id - b.id);
+        orderedByGen.set(gen, bloodDescendants);
+      } else {
+        // Get parent generation's order
+        const parentOrder = orderedByGen.get(gen - 1) || [];
+        const parentIndexMap = new Map();
+        parentOrder.forEach((p, idx) => parentIndexMap.set(p.id, idx));
 
-      // Interleave spouses right after their partners
-      const result = [];
-      const usedSpouses = new Set();
-
-      for (const person of bloodDescendants) {
-        result.push(person);
-        // Find any spouses of this person and add them right after
-        for (const spouse of spouses) {
-          if (usedSpouses.has(spouse.id)) continue;
-          if (spouse.spouse_id === person.id || person.spouse_id === spouse.id) {
-            result.push(spouse);
-            usedSpouses.add(spouse.id);
+        // Also include spouses in parent index map (same index as their partner)
+        for (const p of parentOrder) {
+          const spouses = getSpouses(p);
+          for (const spouse of spouses) {
+            if (!parentIndexMap.has(spouse.id)) {
+              parentIndexMap.set(spouse.id, parentIndexMap.get(p.id));
+            }
           }
         }
-      }
 
-      // Add any remaining spouses at the end (shouldn't happen normally)
-      for (const spouse of spouses) {
-        if (!usedSpouses.has(spouse.id)) {
-          result.push(spouse);
-        }
-      }
+        // Sort children by their parents' order
+        bloodDescendants.sort((a, b) => {
+          // Get parent indices (use the lower index if both parents exist)
+          const aFatherIdx = parentIndexMap.has(a.father_id) ? parentIndexMap.get(a.father_id) : Infinity;
+          const aMotherIdx = parentIndexMap.has(a.mother_id) ? parentIndexMap.get(a.mother_id) : Infinity;
+          const aParentIdx = Math.min(aFatherIdx, aMotherIdx);
 
-      return result;
+          const bFatherIdx = parentIndexMap.has(b.father_id) ? parentIndexMap.get(b.father_id) : Infinity;
+          const bMotherIdx = parentIndexMap.has(b.mother_id) ? parentIndexMap.get(b.mother_id) : Infinity;
+          const bParentIdx = Math.min(bFatherIdx, bMotherIdx);
+
+          if (aParentIdx !== bParentIdx) return aParentIdx - bParentIdx;
+
+          // Same parents - sort by id
+          return a.id - b.id;
+        });
+
+        orderedByGen.set(gen, bloodDescendants);
+      }
     }
 
-    // BOTTOM-UP: Start from the deepest generation and work up
-    for (let gen = maxGen; gen >= 1; gen--) {
-      const peopleInGen = genGroups.get(gen) || [];
-      if (peopleInGen.length === 0) continue;
+    // ============================================
+    // PASS 2: BOTTOM-UP LAYOUT using established order
+    // ============================================
+
+    for (let gen = maxGen; gen >= minGen; gen--) {
+      const orderedBlood = orderedByGen.get(gen) || [];
+      if (orderedBlood.length === 0) continue;
 
       const y = (gen - 1) * (NODE_HEIGHT + VERTICAL_SPACING);
+      const units = createUnits(orderedBlood);
 
       if (gen === maxGen) {
-        // Bottom generation: sort by parents first, then lay out left to right
-        const sortedPeople = sortByParents(peopleInGen);
-        const units = createUnits(sortedPeople);
+        // Bottom generation: lay out left to right in order
         let x = 0;
         for (const unit of units) {
-          if (unit.type === "couple") {
-            positions.set(unit.person1.id, { x, y, person: unit.person1 });
-            positions.set(unit.person2.id, { x: x + NODE_WIDTH + SPOUSE_GAP, y, person: unit.person2 });
+          if (unit.type === "family") {
+            let memberX = x;
+            for (const member of unit.members) {
+              positions.set(member.id, { x: memberX, y, person: member });
+              memberX += NODE_WIDTH + SPOUSE_GAP;
+            }
           } else {
             positions.set(unit.person.id, { x, y, person: unit.person });
           }
@@ -233,23 +258,20 @@
         }
       } else {
         // Upper generations: position based on children's positions
-        const sortedPeople = sortByParents(peopleInGen);
-        const units = createUnits(sortedPeople);
-
-        // For each unit, calculate ideal position based on children
         const unitPositions = [];
 
         for (const unit of units) {
-          const parentIds = unit.type === "couple"
-            ? [unit.person1.id, unit.person2.id]
+          // Get all member IDs in this unit
+          const memberIds = unit.type === "family"
+            ? unit.members.map(m => m.id)
             : [unit.person.id];
 
-          // Find all children of this unit
+          // Find all children of any member in this unit
           let childXs = [];
-          for (const parentId of parentIds) {
+          for (const memberId of memberIds) {
             for (const person of people) {
               if (person.generation.includes(".")) continue;
-              if (person.father_id === parentId || person.mother_id === parentId) {
+              if (person.father_id === memberId || person.mother_id === memberId) {
                 if (positions.has(person.id)) {
                   childXs.push(positions.get(person.id).x + NODE_WIDTH / 2);
                 }
@@ -265,14 +287,14 @@
             const childCenter = (minChildX + maxChildX) / 2;
             idealX = childCenter - unit.width / 2;
           } else {
-            // No children - check if this is a spouse who should be positioned near their partner
+            // No children positioned - will place at end
             idealX = null;
           }
 
           unitPositions.push({ unit, idealX, width: unit.width });
         }
 
-        // Sort by ideal position (nulls at end for now)
+        // Sort by ideal position (nulls at end)
         unitPositions.sort((a, b) => {
           if (a.idealX === null && b.idealX === null) return 0;
           if (a.idealX === null) return 1;
@@ -295,7 +317,6 @@
               const upRight = x + up.width;
               if (!(x >= puRight || upRight + HORIZONTAL_SPACING <= pu.x)) {
                 overlaps = true;
-                // Move to the right of this unit
                 x = Math.max(x, puRight);
               }
             }
@@ -305,11 +326,14 @@
           up.x = x;
           placedUnits.push({ x: up.x, width: up.width });
 
-          // Set positions
+          // Set positions for all members
           const unit = up.unit;
-          if (unit.type === "couple") {
-            positions.set(unit.person1.id, { x, y, person: unit.person1 });
-            positions.set(unit.person2.id, { x: x + NODE_WIDTH + SPOUSE_GAP, y, person: unit.person2 });
+          if (unit.type === "family") {
+            let memberX = x;
+            for (const member of unit.members) {
+              positions.set(member.id, { x: memberX, y, person: member });
+              memberX += NODE_WIDTH + SPOUSE_GAP;
+            }
           } else {
             positions.set(unit.person.id, { x, y, person: unit.person });
           }
@@ -317,37 +341,34 @@
       }
     }
 
-    // Post-process: position childless spouses next to their partner
+    // ============================================
+    // PASS 3: Post-process childless spouses
+    // ============================================
+    // Position childless spouses right next to their partner
+
     for (const person of people) {
-      if (!person.generation.includes(".")) continue; // Only process spouses
+      if (!person.generation.includes(".")) continue;
       if (!positions.has(person.id)) continue;
 
-      // Find the partner (the blood relative this spouse is married to)
       const partnerId = person.spouse_id;
       if (!partnerId || !positions.has(partnerId)) continue;
 
       const partnerPos = positions.get(partnerId);
       const spousePos = positions.get(person.id);
 
-      // Check if this spouse has any children with the partner
+      // Check if this spouse has any children
       let hasChildren = false;
       for (const p of people) {
         if (p.generation.includes(".")) continue;
-        if (p.father_id === person.id || p.mother_id === person.id ||
-            p.father_id === partnerId || p.mother_id === partnerId) {
-          // Check if both parents match this couple
-          const parents = [p.father_id, p.mother_id];
-          if (parents.includes(person.id) || parents.includes(partnerId)) {
-            hasChildren = true;
-            break;
-          }
+        if (p.father_id === person.id || p.mother_id === person.id) {
+          hasChildren = true;
+          break;
         }
       }
 
       // If no children, position spouse right next to partner
       if (!hasChildren) {
-        const newX = partnerPos.x + NODE_WIDTH + SPOUSE_GAP;
-        spousePos.x = newX;
+        spousePos.x = partnerPos.x + NODE_WIDTH + SPOUSE_GAP;
       }
     }
 
