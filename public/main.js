@@ -51,17 +51,6 @@ async function main() {
       option.textContent = familyId; // Display family ID
       familyIdSelect.appendChild(option);
     });
-    let tree_select = $("#tree-family-select");
-    tree_select.onchange = function () {
-      gotoTree(all_people.filter((e) => e[1] == tree_select.value));
-    };
-    tree_select.innerHTML = "";
-    roots.forEach((familyId) => {
-      let option = document.createElement("option");
-      option.value = familyId;
-      option.textContent = familyId; // Display family ID
-      tree_select.appendChild(option);
-    });
   });
 }
 
@@ -131,19 +120,78 @@ function wait(t = 1) {
   });
 }
 
-function gotoTree(
-  people = all_people.filter(
-    (e) => e[1] == $("#tree-family-select").value
-  )
-) {
+function gotoTree() {
   hideAll();
   $("#tree").classList.remove("out");
+  setupTreeRootSearch();
+  // Resize canvas
   const tree_div = $("#tree");
   const canvas = $("#tree_display");
   canvas.width = tree_div.clientWidth;
-  canvas.height = tree_div.clientHeight;
-  TREE_DIAGRAM.loadPeople(people);
+  canvas.height = tree_div.clientHeight - 50;
   TREE_DIAGRAM.draw();
+}
+
+function setupTreeRootSearch() {
+  let searchInput = $("#tree-root-search");
+  let resultsDiv = $("#tree-search-results");
+
+  searchInput.oninput = () => {
+    let searchTerm = searchInput.value.toLowerCase().trim();
+    resultsDiv.innerHTML = "";
+
+    if (searchTerm.length < 1) {
+      resultsDiv.style.display = "none";
+      return;
+    }
+
+    let matches = names.filter(p => p.name.toLowerCase().includes(searchTerm)).slice(0, 10);
+
+    if (matches.length > 0) {
+      resultsDiv.style.display = "block";
+      matches.forEach(p => {
+        let div = document.createElement("div");
+        div.className = "search-result-item";
+        div.textContent = p.name;
+        div.onclick = () => selectTreeRoot(p.name);
+        resultsDiv.appendChild(div);
+      });
+    } else {
+      resultsDiv.style.display = "none";
+    }
+  };
+
+  // Hide results when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".tree-search-container")) {
+      resultsDiv.style.display = "none";
+    }
+  });
+}
+
+async function selectTreeRoot(name) {
+  let personId = getIdByName(name);
+  if (!personId) {
+    alert("Person not found");
+    return;
+  }
+
+  $("#tree-root-search").value = "";
+  $("#tree-root-search").style.display = "none";
+  $("#tree-root-name").textContent = name;
+  $("#clear-tree-root").style.display = "inline";
+  $("#tree-search-results").style.display = "none";
+
+  // Load tree from this root
+  await TREE_DIAGRAM.loadTree(personId);
+}
+
+function clearTreeRoot() {
+  $("#tree-root-search").value = "";
+  $("#tree-root-search").style.display = "";
+  $("#tree-root-name").textContent = "";
+  $("#clear-tree-root").style.display = "none";
+  TREE_DIAGRAM.clear();
 }
 
 async function updateFamilyRoot(e) {
@@ -191,7 +239,7 @@ async function addFamily() {
     .map((row) => {
       return { name: row[2] };
     });
-  // Update family dropdowns
+  // Update family dropdown
   let familyIds = await request("/family_ids");
   if (!familyIds.error) {
     let familyIdSelect = $("#family-id");
@@ -201,14 +249,6 @@ async function addFamily() {
       option.value = familyId;
       option.textContent = familyId;
       familyIdSelect.appendChild(option);
-    });
-    let tree_select = $("#tree-family-select");
-    tree_select.innerHTML = "";
-    familyIds.forEach((familyId) => {
-      let option = document.createElement("option");
-      option.value = familyId;
-      option.textContent = familyId;
-      tree_select.appendChild(option);
     });
   }
   gotoSettings();

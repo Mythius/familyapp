@@ -81,7 +81,14 @@
     </div>
 
     <div id="tree" class="main out">
-      <select name="Family" id="tree-family-select"></select>
+      <div class="tree-controls">
+        <div class="tree-search-container">
+          <input type="text" id="tree-root-search" placeholder="Select root person..." />
+          <div id="tree-search-results" class="search-dropdown"></div>
+        </div>
+        <span id="tree-root-name"></span>
+        <button onclick="clearTreeRoot()" id="clear-tree-root" style="display:none" class="clear-btn">✕</button>
+      </div>
       <canvas id="tree_display"></canvas>
     </div>
 
