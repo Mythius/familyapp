@@ -534,12 +534,55 @@ button {
   flex-direction: column;
 }
 
-#tree-family-select {
+/* Tree controls */
+.tree-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.tree-search-container {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.tree-search-container input {
   width: 100%;
   padding: 10px;
   font-size: 1rem;
-  margin-bottom: 10px;
+  border: 1px solid #ced4da;
   border-radius: 5px;
+  box-sizing: border-box;
+}
+
+#tree-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ced4da;
+  border-radius: 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  display: none;
+}
+
+#tree-root-name {
+  font-weight: bold;
+  color: #0056b3;
+  padding: 8px 15px;
+  background: #e7f3ff;
+  border-radius: 20px;
+  font-size: 1rem;
 }
 
 #tree_display {
@@ -603,10 +646,8 @@ button {
     width: 95%;
   }
 
-  #tree-family-select {
-    width: auto;
-    min-width: 200px;
-    align-self: flex-start;
+  .tree-search-container {
+    max-width: 300px;
   }
 }
 

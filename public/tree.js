@@ -2,269 +2,470 @@
   const canvas = document.getElementById("tree_display");
   const ctx = canvas.getContext("2d");
 
+  // View state
   let scale = 1;
   let offsetX = 0;
   let offsetY = 0;
 
-  // You can call these from your pinch/drag handlers:
+  // Data state
+  let people = [];
+  let peopleMap = {};
+  let generations = {}; // ID -> generation string from backend
+  let rootPersonId = null;
+
+  // Layout constants
+  const NODE_WIDTH = 140;
+  const NODE_HEIGHT = 50;
+  const NODE_RADIUS = 8;
+  const HORIZONTAL_SPACING = 20;
+  const VERTICAL_SPACING = 100;
+  const SPOUSE_GAP = 10;
+  const GENERATION_LABEL_WIDTH = 50;
+
+  // Colors
+  const COLORS = {
+    male: "#a8d5e8",
+    female: "#f5c6d6",
+    unknown: "#e0e0e0",
+    maleBorder: "#5a9fc7",
+    femaleBorder: "#d4879c",
+    unknownBorder: "#999",
+    spouseLine: "#e74c3c",
+    childLine: "#666",
+    background: "#f8f9fa",
+    text: "#333",
+    genLabel: "#666"
+  };
+
+  // Stored node positions for click detection
+  let nodes = [];
+
+  // Zoom at a specific point
   function zoomAt(cx, cy, factor) {
     offsetX = cx - (cx - offsetX) * factor;
     offsetY = cy - (cy - offsetY) * factor;
     scale *= factor;
-    drawTree();
+    draw();
   }
 
+  // Pan the view
   function pan(dx, dy) {
     offsetX += dx;
     offsetY += dy;
-    drawTree();
+    draw();
   }
 
-  let nodes = []; // list of drawn people with screen coordinates for hit testing
+  // Reset view to center on the tree
+  function resetView() {
+    scale = 1;
+    offsetX = GENERATION_LABEL_WIDTH + 50;
+    offsetY = 80;
+    draw();
+  }
 
-  const nodeWidth = 100;
-  const nodeHeight = 40;
-  const horizontalSpacing = 30;
-  const verticalSpacing = 80;
+  // Load data from the descendants endpoint
+  async function loadTree(personId) {
+    rootPersonId = personId;
 
-  // Sample family data:
+    try {
+      // Fetch descendants with generation data
+      generations = await request(`/descendants/${personId}`);
 
-  // Convert to ID map for easy lookup
-  let peopleMap;
+      // Get the IDs we need
+      const descendantIds = Object.keys(generations).map(id => parseInt(id));
 
-  // Compute tree layout
-  function buildTreeData() {
+      // Filter all_people to only include descendants
+      people = all_people
+        .filter((row, i) => i > 0 && descendantIds.includes(row[0]))
+        .map(row => ({
+          id: row[0],
+          name: row[2],
+          gender: row[3],
+          mother_id: row[9],
+          father_id: row[10],
+          spouse_id: row[11] ? Number(row[11]) : null,
+          generation: generations[row[0]]
+        }));
+
+      peopleMap = Object.fromEntries(people.map(p => [p.id, p]));
+
+      resetView();
+    } catch (e) {
+      console.error("Error loading tree:", e);
+      alert("Error loading tree data");
+    }
+  }
+
+  // Build layout - organize by generation rows with spouses together
+  function buildLayout() {
     const positions = new Map();
-    const xPositions = new Map();
-    const generationById = new Map();
-    const idMap = Object.fromEntries(people.map((p) => [p.id, p]));
-    const childrenMap = new Map();
 
-    // Build children map
-    for (const person of people) {
-      const parents = [person.father_id, person.mother_id].filter(Boolean);
-      for (const parent of parents) {
-        if (!childrenMap.has(parent)) childrenMap.set(parent, []);
-        childrenMap.get(parent).push(person.id);
-      }
-    }
+    if (people.length === 0) return positions;
 
-    // Step 1: Assign generations with spouse logic
-    const visited = new Set();
-    const queue = [];
+    // Group people by their integer generation (1, 2, 3, etc.)
+    const genGroups = new Map();
 
     for (const person of people) {
-      const hasParents = person.father_id || person.mother_id;
-      const spouse = person.spouse_id ? idMap[person.spouse_id] : null;
-      const spouseHasParents = spouse && (spouse.father_id || spouse.mother_id);
-
-      if (!hasParents && (!spouse || !spouseHasParents)) {
-        queue.push({ id: person.id, gen: 0 });
-        if (spouse) queue.push({ id: spouse.id, gen: 0 });
-      }
+      const gen = Math.floor(parseFloat(person.generation));
+      if (!genGroups.has(gen)) genGroups.set(gen, []);
+      genGroups.get(gen).push(person);
     }
 
-    while (queue.length) {
-      const { id, gen } = queue.shift();
-      if (generationById.has(id)) continue;
+    // Sort generations
+    const sortedGens = [...genGroups.keys()].sort((a, b) => a - b);
 
-      generationById.set(id, gen);
-      const person = idMap[id];
+    // For each generation, group couples together
+    for (const gen of sortedGens) {
+      const peopleInGen = genGroups.get(gen);
+      const placed = new Set();
+      const units = []; // Each unit is either a couple or a single person
 
-      if (person.spouse_id && !generationById.has(person.spouse_id)) {
-        queue.push({ id: person.spouse_id, gen });
-      }
+      // First, identify couples and singles
+      for (const person of peopleInGen) {
+        if (placed.has(person.id)) continue;
 
-      const children = people.filter(
-        (p) => p.father_id === id || p.mother_id === id
-      );
-      for (const child of children) {
-        if (!generationById.has(child.id)) {
-          queue.push({ id: child.id, gen: gen + 1 });
+        // Check if this person has a spouse in the same generation
+        const spouse = person.spouse_id ? peopleMap[person.spouse_id] : null;
+        const spouseInSameGen = spouse && Math.floor(parseFloat(spouse.generation)) === gen;
+
+        if (spouseInSameGen && !placed.has(spouse.id)) {
+          // This is a couple - put blood relative first
+          const personIsBlood = !person.generation.includes(".");
+          const spouseIsBlood = !spouse.generation.includes(".");
+
+          if (personIsBlood || (!personIsBlood && !spouseIsBlood)) {
+            units.push({ type: "couple", person1: person, person2: spouse });
+          } else {
+            units.push({ type: "couple", person1: spouse, person2: person });
+          }
+          placed.add(person.id);
+          placed.add(spouse.id);
+        } else {
+          // Single person (or spouse in different gen)
+          units.push({ type: "single", person: person });
+          placed.add(person.id);
         }
       }
-    }
 
-    // Step 2: Layout x positions bottom-up
-    const levels = new Map();
-    const maxGen = Math.max(...generationById.values());
+      // Sort units to try to align children under parents
+      units.sort((a, b) => {
+        const aIds = a.type === "couple" ? [a.person1.id, a.person2.id] : [a.person.id];
+        const bIds = b.type === "couple" ? [b.person1.id, b.person2.id] : [b.person.id];
 
-    for (const [id, gen] of generationById.entries()) {
-      if (!levels.has(gen)) levels.set(gen, []);
-      levels.get(gen).push(idMap[id]);
-    }
-
-    let xCounter = 0;
-
-    function setCoupleX(id1, id2, centerX) {
-      const spacing = nodeWidth + 10;
-      const left = centerX - spacing / 2;
-      xPositions.set(id1, left);
-      xPositions.set(id2, left + spacing);
-    }
-
-    for (let gen = maxGen; gen >= 0; gen--) {
-      const peopleAtLevel = levels.get(gen) || [];
-
-      for (const person of peopleAtLevel) {
-        const children = people.filter(
-          (p) => p.father_id === person.id || p.mother_id === person.id
-        );
-        const childXs = children
-          .map((c) => xPositions.get(c.id))
-          .filter(Boolean);
-
-        if (childXs.length > 0) {
-          const avgX = childXs.reduce((a, b) => a + b, 0) / childXs.length;
-          if (person.spouse_id) {
-            setCoupleX(person.id, person.spouse_id, avgX);
-          } else if (!xPositions.has(person.id)) {
-            xPositions.set(person.id, avgX);
-          }
-        } else {
-          // No children — assign new x position
-          if (!xPositions.has(person.id)) {
-            const x = xCounter * (nodeWidth + horizontalSpacing + 20);
-            xPositions.set(person.id, x);
-            if (person.spouse_id && !xPositions.has(person.spouse_id)) {
-              xPositions.set(person.spouse_id, x + nodeWidth + 10);
-              xCounter++;
+        // Get parent positions if available
+        const getParentX = (ids) => {
+          for (const id of ids) {
+            const p = peopleMap[id];
+            if (p.father_id && positions.has(p.father_id)) {
+              return positions.get(p.father_id).x;
             }
-            xCounter++;
+            if (p.mother_id && positions.has(p.mother_id)) {
+              return positions.get(p.mother_id).x;
+            }
           }
-        }
-      }
-    }
+          return Infinity;
+        };
 
-    // 🔁 Step 3: Ensure all spouses are side-by-side even if not handled above
-    for (const person of people) {
-      if (
-        person.spouse_id &&
-        generationById.get(person.id) === generationById.get(person.spouse_id)
-      ) {
-        const id1 = person.id;
-        const id2 = person.spouse_id;
-
-        const spacing = nodeWidth + 10;
-        const has1 = xPositions.has(id1);
-        const has2 = xPositions.has(id2);
-
-        if (has1 && !has2) {
-          xPositions.set(id2, xPositions.get(id1) + spacing);
-        } else if (!has1 && has2) {
-          xPositions.set(id1, xPositions.get(id2) - spacing);
-        } else if (!has1 && !has2) {
-          const x = xCounter * (nodeWidth + horizontalSpacing + 20);
-          xPositions.set(id1, x);
-          xPositions.set(id2, x + spacing);
-          xCounter++;
-        } else {
-          // both are set, but make sure they're properly spaced
-          const x1 = xPositions.get(id1);
-          const x2 = xPositions.get(id2);
-          if (Math.abs(x1 - x2) < spacing - 1e-3) {
-            const newLeft = Math.min(x1, x2);
-            xPositions.set(id1, newLeft);
-            xPositions.set(id2, newLeft + spacing);
-          }
-        }
-      }
-    }
-
-    // Step 4: Assign final x/y positions to canvas
-    for (const [id, x] of xPositions.entries()) {
-      const gen = generationById.get(id);
-      positions.set(id, {
-        x,
-        y: gen * (nodeHeight + verticalSpacing),
+        return getParentX(aIds) - getParentX(bIds);
       });
+
+      // Position units horizontally
+      let x = 0;
+      const y = (gen - 1) * (NODE_HEIGHT + VERTICAL_SPACING);
+
+      for (const unit of units) {
+        if (unit.type === "couple") {
+          positions.set(unit.person1.id, { x, y, person: unit.person1 });
+          positions.set(unit.person2.id, { x: x + NODE_WIDTH + SPOUSE_GAP, y, person: unit.person2 });
+          x += (NODE_WIDTH * 2) + SPOUSE_GAP + HORIZONTAL_SPACING;
+        } else {
+          positions.set(unit.person.id, { x, y, person: unit.person });
+          x += NODE_WIDTH + HORIZONTAL_SPACING;
+        }
+      }
+    }
+
+    // Second pass: try to center children under their parents
+    for (const gen of sortedGens.slice(1)) { // Skip first generation
+      const peopleInGen = genGroups.get(gen);
+
+      // Group by parent couple
+      const parentGroups = new Map();
+
+      for (const person of peopleInGen) {
+        // Only blood descendants (no decimal in generation)
+        if (person.generation.includes(".")) continue;
+
+        const parentKey = `${person.father_id || 0}-${person.mother_id || 0}`;
+        if (!parentGroups.has(parentKey)) {
+          parentGroups.set(parentKey, {
+            fatherId: person.father_id,
+            motherId: person.mother_id,
+            children: []
+          });
+        }
+        parentGroups.get(parentKey).children.push(person);
+      }
+
+      // For each parent group, adjust positions
+      for (const [key, group] of parentGroups) {
+        if (group.children.length === 0) continue;
+
+        // Find parent center
+        let parentCenterX = null;
+        if (group.fatherId && positions.has(group.fatherId)) {
+          const fatherPos = positions.get(group.fatherId);
+          if (group.motherId && positions.has(group.motherId)) {
+            const motherPos = positions.get(group.motherId);
+            parentCenterX = (fatherPos.x + motherPos.x + NODE_WIDTH) / 2;
+          } else {
+            parentCenterX = fatherPos.x + NODE_WIDTH / 2;
+          }
+        } else if (group.motherId && positions.has(group.motherId)) {
+          parentCenterX = positions.get(group.motherId).x + NODE_WIDTH / 2;
+        }
+
+        if (parentCenterX === null) continue;
+
+        // Calculate current children span (including their spouses)
+        const childUnits = [];
+        const processedSpouses = new Set();
+
+        for (const child of group.children) {
+          const childPos = positions.get(child.id);
+          if (!childPos) continue;
+
+          // Check if child has a spouse
+          if (child.spouse_id && positions.has(child.spouse_id) && !processedSpouses.has(child.spouse_id)) {
+            const spousePos = positions.get(child.spouse_id);
+            const leftX = Math.min(childPos.x, spousePos.x);
+            const rightX = Math.max(childPos.x, spousePos.x) + NODE_WIDTH;
+            childUnits.push({ leftX, rightX, ids: [child.id, child.spouse_id] });
+            processedSpouses.add(child.spouse_id);
+            processedSpouses.add(child.id);
+          } else if (!processedSpouses.has(child.id)) {
+            childUnits.push({ leftX: childPos.x, rightX: childPos.x + NODE_WIDTH, ids: [child.id] });
+            processedSpouses.add(child.id);
+          }
+        }
+
+        if (childUnits.length === 0) continue;
+
+        // Sort units by current x position
+        childUnits.sort((a, b) => a.leftX - b.leftX);
+
+        // Calculate total width and current center
+        const totalLeft = childUnits[0].leftX;
+        const totalRight = childUnits[childUnits.length - 1].rightX;
+        const currentCenter = (totalLeft + totalRight) / 2;
+
+        // Calculate offset to center under parents
+        const offset = parentCenterX - currentCenter;
+
+        // Apply offset to all children in this group
+        for (const unit of childUnits) {
+          for (const id of unit.ids) {
+            const pos = positions.get(id);
+            if (pos) {
+              pos.x += offset;
+            }
+          }
+        }
+      }
+    }
+
+    // Normalize positions (shift everything so min x is 0)
+    let minX = Infinity;
+    for (const pos of positions.values()) {
+      minX = Math.min(minX, pos.x);
+    }
+    if (minX !== Infinity && minX !== 0) {
+      for (const pos of positions.values()) {
+        pos.x -= minX;
+      }
     }
 
     return positions;
   }
 
-  function drawTree() {
+  // Draw the tree
+  function draw() {
+    if (!canvas) return;
+
+    // Resize canvas to fill container
+    const container = canvas.parentElement;
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight - 50; // Account for controls
+
+    // Apply transform
     ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-    ctx.clearRect(
+
+    // Clear background
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(
       -offsetX / scale,
       -offsetY / scale,
       canvas.width / scale,
       canvas.height / scale
     );
+
     nodes = [];
 
-    const positions = buildTreeData();
+    if (people.length === 0) {
+      // Draw placeholder text
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = COLORS.genLabel;
+      ctx.font = "16px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Select a person above to view their family tree", canvas.width / 2, canvas.height / 2);
+      return;
+    }
 
-    // Draw lines first
+    const positions = buildLayout();
+
+    // Draw generation labels
+    const genNumbers = [...new Set(people.map(p => Math.floor(parseFloat(p.generation))))].sort((a, b) => a - b);
+    ctx.fillStyle = COLORS.genLabel;
+    ctx.font = "bold 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.textAlign = "right";
+
+    for (const gen of genNumbers) {
+      const y = (gen - 1) * (NODE_HEIGHT + VERTICAL_SPACING) + NODE_HEIGHT / 2 + 5;
+      ctx.fillText(`Gen ${gen}`, -20, y);
+    }
+
+    // Draw connections first (behind nodes)
+    ctx.lineWidth = 2;
+
+    // Draw spouse connections (horizontal red lines)
+    const drawnSpouseLines = new Set();
     for (const person of people) {
-      const pos = positions.get(person.id);
-      if (!pos) continue;
+      if (person.spouse_id && positions.has(person.id) && positions.has(person.spouse_id)) {
+        const key = [person.id, person.spouse_id].sort().join("-");
+        if (drawnSpouseLines.has(key)) continue;
+        drawnSpouseLines.add(key);
 
-      if (person.father_id && positions.get(person.father_id)) {
-        const p2 = positions.get(person.father_id);
-        drawLine(
-          p2.x + nodeWidth / 2,
-          p2.y + nodeHeight,
-          pos.x + nodeWidth / 2,
-          pos.y
-        );
-      }
-      if (person.mother_id && positions.get(person.mother_id)) {
-        const p2 = positions.get(person.mother_id);
-        drawLine(
-          p2.x + nodeWidth / 2,
-          p2.y + nodeHeight,
-          pos.x + nodeWidth / 2,
-          pos.y
-        );
-      }
+        const pos1 = positions.get(person.id);
+        const pos2 = positions.get(person.spouse_id);
 
-      if (person.spouse_id && positions.get(person.spouse_id)) {
-        const spousePos = positions.get(person.spouse_id);
-        drawLine(
-          pos.x + nodeWidth,
-          pos.y + nodeHeight / 2,
-          spousePos.x,
-          spousePos.y + nodeHeight / 2
-        );
+        // Draw horizontal line between spouses
+        const y = pos1.y + NODE_HEIGHT / 2;
+        const x1 = Math.min(pos1.x, pos2.x) + NODE_WIDTH;
+        const x2 = Math.max(pos1.x, pos2.x);
+
+        if (x2 > x1) {
+          ctx.strokeStyle = COLORS.spouseLine;
+          ctx.beginPath();
+          ctx.moveTo(x1, y);
+          ctx.lineTo(x2, y);
+          ctx.stroke();
+        }
       }
     }
 
-    // Draw people
+    // Draw parent-child connections
     for (const person of people) {
-      const pos = positions.get(person.id);
-      if (!pos) continue;
+      if (!positions.has(person.id)) continue;
+      const childPos = positions.get(person.id);
 
-      const color = person.gender === "Male" ? "#87ceeb" : "#f9c0cb";
-      drawNode(pos.x, pos.y, person.name, color);
+      // Skip spouses (they don't have parent lines in this tree)
+      if (person.generation.includes(".")) continue;
+
+      // Find parents
+      const parents = [];
+      if (person.father_id && positions.has(person.father_id)) {
+        parents.push(positions.get(person.father_id));
+      }
+      if (person.mother_id && positions.has(person.mother_id)) {
+        parents.push(positions.get(person.mother_id));
+      }
+
+      if (parents.length > 0) {
+        // Calculate parent center point
+        let parentX;
+        if (parents.length === 2) {
+          parentX = (parents[0].x + parents[1].x + NODE_WIDTH) / 2;
+        } else {
+          parentX = parents[0].x + NODE_WIDTH / 2;
+        }
+        const parentY = parents[0].y + NODE_HEIGHT;
+
+        const childX = childPos.x + NODE_WIDTH / 2;
+        const childY = childPos.y;
+
+        // Draw line with elbow
+        ctx.strokeStyle = COLORS.childLine;
+        ctx.beginPath();
+        ctx.moveTo(parentX, parentY);
+        const midY = parentY + (childY - parentY) / 2;
+        ctx.lineTo(parentX, midY);
+        ctx.lineTo(childX, midY);
+        ctx.lineTo(childX, childY);
+        ctx.stroke();
+      }
+    }
+
+    // Draw nodes
+    for (const [id, pos] of positions) {
+      const person = pos.person;
+      drawNode(pos.x, pos.y, person);
       nodes.push({
-        ...pos,
-        width: nodeWidth,
-        height: nodeHeight,
-        name: person.name,
+        x: pos.x,
+        y: pos.y,
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT,
+        name: person.name
       });
     }
   }
 
-  function drawLine(x1, y1, x2, y2) {
-    ctx.strokeStyle = "#999";
+  // Draw a person node
+  function drawNode(x, y, person) {
+    // Determine colors based on gender
+    let fillColor, borderColor;
+    if (person.gender === "Male") {
+      fillColor = COLORS.male;
+      borderColor = COLORS.maleBorder;
+    } else if (person.gender === "Female") {
+      fillColor = COLORS.female;
+      borderColor = COLORS.femaleBorder;
+    } else {
+      fillColor = COLORS.unknown;
+      borderColor = COLORS.unknownBorder;
+    }
+
+    // Draw rounded rectangle
+    ctx.fillStyle = fillColor;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 2;
+
     ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
+    ctx.roundRect(x, y, NODE_WIDTH, NODE_HEIGHT, NODE_RADIUS);
+    ctx.fill();
     ctx.stroke();
+
+    // Draw name
+    ctx.fillStyle = COLORS.text;
+    ctx.font = "13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.textAlign = "center";
+
+    // Truncate name if too long
+    let displayName = person.name;
+    const maxWidth = NODE_WIDTH - 10;
+    while (ctx.measureText(displayName).width > maxWidth && displayName.length > 3) {
+      displayName = displayName.slice(0, -4) + "...";
+    }
+
+    ctx.fillText(displayName, x + NODE_WIDTH / 2, y + NODE_HEIGHT / 2 + 5);
+
+    // Draw small generation indicator
+    ctx.font = "10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = COLORS.genLabel;
+    ctx.textAlign = "left";
+    ctx.fillText(person.generation, x + 5, y + 12);
   }
 
-  function drawNode(x, y, name, color) {
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, nodeWidth, nodeHeight);
-    ctx.strokeStyle = "#333";
-    ctx.strokeRect(x, y, nodeWidth, nodeHeight);
-    ctx.fillStyle = "#000";
-    ctx.font = "14px sans-serif";
-    ctx.fillText(name, x + 5, y + 25);
-  }
-
-  // Mouse drag support for laptop/desktop
+  // Mouse/touch interaction
   let isDragging = false;
   let wasDragging = false;
   let lastMouseX = 0;
@@ -272,9 +473,7 @@
   let dragStartX = 0;
   let dragStartY = 0;
 
-  // Detect click on person box (only if not dragging)
   canvas.addEventListener("click", (e) => {
-    // Ignore click if we just finished dragging
     if (wasDragging) {
       wasDragging = false;
       return;
@@ -291,31 +490,23 @@
         mouseY >= node.y &&
         mouseY <= node.y + node.height
       ) {
-        onPersonClick(node.name);
+        handleClick(node.name);
         break;
       }
     }
   });
 
-  function onPersonClick(name) {
-    handleClick(name);
-  }
-
-  // Mouse wheel zoom support for laptop/desktop
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-
-    // Zoom in or out based on scroll direction (reduced sensitivity)
-    // Use smaller zoom factor for smoother trackpad experience
-    const zoomFactor = e.deltaY < 0 ? 1.03 : 0.97;
+    const zoomFactor = e.deltaY < 0 ? 1.05 : 0.95;
     zoomAt(mouseX, mouseY, zoomFactor);
   }, { passive: false });
 
   canvas.addEventListener("mousedown", (e) => {
-    if (e.button === 0) { // Left click
+    if (e.button === 0) {
       isDragging = true;
       wasDragging = false;
       lastMouseX = e.clientX;
@@ -333,15 +524,13 @@
       lastMouseX = e.clientX;
       lastMouseY = e.clientY;
 
-      // Check if we've moved enough to consider it a drag
       const totalDx = e.clientX - dragStartX;
       const totalDy = e.clientY - dragStartY;
       if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
         wasDragging = true;
       }
 
-      // Apply damping for smoother pan (reduced sensitivity)
-      pan(dx * 0.7, dy * 0.7);
+      pan(dx, dy);
     }
   });
 
@@ -357,38 +546,75 @@
     canvas.style.cursor = "grab";
   });
 
-  // Set initial cursor style
   canvas.style.cursor = "grab";
 
-  const TREE_DIAGRAM = {};
+  // Touch support
+  let lastTouchDist = 0;
+  let lastTouchCenter = { x: 0, y: 0 };
 
-  TREE_DIAGRAM.zoomAt = zoomAt;
-  TREE_DIAGRAM.pan = pan;
-  TREE_DIAGRAM.loadPeople = function (ap) {
-    people = ap
-      .map((e) => {
-        return {
-          id: e[0],
-          name: e[2],
-          gender: e[3],
-          father_id: e[10],
-          mother_id: e[9],
-          spouse_id: e[11],
-        };
-      });
-    peopleMap = Object.fromEntries(people.map((p) => [p.id, p]));
+  canvas.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 1) {
+      isDragging = true;
+      lastMouseX = e.touches[0].clientX;
+      lastMouseY = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+      isDragging = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+      lastTouchCenter = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+      };
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1 && isDragging) {
+      const dx = e.touches[0].clientX - lastMouseX;
+      const dy = e.touches[0].clientY - lastMouseY;
+      lastMouseX = e.touches[0].clientX;
+      lastMouseY = e.touches[0].clientY;
+      pan(dx, dy);
+    } else if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const center = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+      };
+
+      if (lastTouchDist > 0) {
+        const factor = dist / lastTouchDist;
+        zoomAt(center.x, center.y, factor);
+      }
+
+      lastTouchDist = dist;
+      lastTouchCenter = center;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("touchend", () => {
+    isDragging = false;
+    lastTouchDist = 0;
+  });
+
+  // Export the tree diagram API
+  const TREE_DIAGRAM = {
+    loadTree,
+    draw,
+    resetView,
+    zoomAt,
+    pan,
+    clear: function() {
+      people = [];
+      generations = {};
+      rootPersonId = null;
+      draw();
+    }
   };
 
-  TREE_DIAGRAM.draw = drawTree;
-
   global.TREE_DIAGRAM = TREE_DIAGRAM;
-
-  Touch.init((data) => {
-    if (data.type == "zoom") {
-      if (scale != 1) debugger;
-      zoomAt(data.ct.x, data.ct.y, scale);
-    } else if (data.type == "scroll") {
-      pan(data.dx, data.dy);
-    }
-  });
 })(this);
