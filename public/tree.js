@@ -164,6 +164,22 @@
       return unit.width + HORIZONTAL_SPACING;
     }
 
+    // Helper to sort people by their parents (so siblings stay together)
+    function sortByParents(peopleList) {
+      return [...peopleList].sort((a, b) => {
+        // Sort by father_id first, then mother_id, then by their own id
+        const aFather = a.father_id || 0;
+        const bFather = b.father_id || 0;
+        if (aFather !== bFather) return aFather - bFather;
+
+        const aMother = a.mother_id || 0;
+        const bMother = b.mother_id || 0;
+        if (aMother !== bMother) return aMother - bMother;
+
+        return a.id - b.id;
+      });
+    }
+
     // BOTTOM-UP: Start from the deepest generation and work up
     for (let gen = maxGen; gen >= 1; gen--) {
       const peopleInGen = genGroups.get(gen) || [];
@@ -172,8 +188,9 @@
       const y = (gen - 1) * (NODE_HEIGHT + VERTICAL_SPACING);
 
       if (gen === maxGen) {
-        // Bottom generation: just lay out left to right
-        const units = createUnits(peopleInGen);
+        // Bottom generation: sort by parents first, then lay out left to right
+        const sortedPeople = sortByParents(peopleInGen);
+        const units = createUnits(sortedPeople);
         let x = 0;
         for (const unit of units) {
           if (unit.type === "couple") {
@@ -186,7 +203,8 @@
         }
       } else {
         // Upper generations: position based on children's positions
-        const units = createUnits(peopleInGen);
+        const sortedPeople = sortByParents(peopleInGen);
+        const units = createUnits(sortedPeople);
 
         // For each unit, calculate ideal position based on children
         const unitPositions = [];
@@ -217,14 +235,14 @@
             const childCenter = (minChildX + maxChildX) / 2;
             idealX = childCenter - unit.width / 2;
           } else {
-            // No children positioned yet, will place later
+            // No children - check if this is a spouse who should be positioned near their partner
             idealX = null;
           }
 
           unitPositions.push({ unit, idealX, width: unit.width });
         }
 
-        // Sort by ideal position (nulls at end)
+        // Sort by ideal position (nulls at end for now)
         unitPositions.sort((a, b) => {
           if (a.idealX === null && b.idealX === null) return 0;
           if (a.idealX === null) return 1;
@@ -266,6 +284,40 @@
             positions.set(unit.person.id, { x, y, person: unit.person });
           }
         }
+      }
+    }
+
+    // Post-process: position childless spouses next to their partner
+    for (const person of people) {
+      if (!person.generation.includes(".")) continue; // Only process spouses
+      if (!positions.has(person.id)) continue;
+
+      // Find the partner (the blood relative this spouse is married to)
+      const partnerId = person.spouse_id;
+      if (!partnerId || !positions.has(partnerId)) continue;
+
+      const partnerPos = positions.get(partnerId);
+      const spousePos = positions.get(person.id);
+
+      // Check if this spouse has any children with the partner
+      let hasChildren = false;
+      for (const p of people) {
+        if (p.generation.includes(".")) continue;
+        if (p.father_id === person.id || p.mother_id === person.id ||
+            p.father_id === partnerId || p.mother_id === partnerId) {
+          // Check if both parents match this couple
+          const parents = [p.father_id, p.mother_id];
+          if (parents.includes(person.id) || parents.includes(partnerId)) {
+            hasChildren = true;
+            break;
+          }
+        }
+      }
+
+      // If no children, position spouse right next to partner
+      if (!hasChildren) {
+        const newX = partnerPos.x + NODE_WIDTH + SPOUSE_GAP;
+        spousePos.x = newX;
       }
     }
 
