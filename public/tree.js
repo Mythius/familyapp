@@ -258,10 +258,12 @@
         }
       } else {
         // Upper generations: position based on children's positions
+        // BUT preserve the sibling order from Pass 1
+
+        // First, calculate ideal positions for each unit
         const unitPositions = [];
 
         for (const unit of units) {
-          // Get all member IDs in this unit
           const memberIds = unit.type === "family"
             ? unit.members.map(m => m.id)
             : [unit.person.id];
@@ -281,46 +283,84 @@
 
           let idealX;
           if (childXs.length > 0) {
-            // Center above children
             const minChildX = Math.min(...childXs);
             const maxChildX = Math.max(...childXs);
             const childCenter = (minChildX + maxChildX) / 2;
             idealX = childCenter - unit.width / 2;
           } else {
-            // No children positioned - will place at end
-            idealX = null;
+            idealX = null; // Will be interpolated
           }
 
           unitPositions.push({ unit, idealX, width: unit.width });
         }
 
-        // Sort by ideal position (nulls at end)
-        unitPositions.sort((a, b) => {
-          if (a.idealX === null && b.idealX === null) return 0;
-          if (a.idealX === null) return 1;
-          if (b.idealX === null) return -1;
-          return a.idealX - b.idealX;
-        });
+        // Interpolate positions for units without children (unmarried siblings)
+        // They should be positioned between their adjacent siblings
+        for (let i = 0; i < unitPositions.length; i++) {
+          if (unitPositions[i].idealX === null) {
+            // Find nearest positioned siblings on left and right
+            let leftX = null;
+            let rightX = null;
+            let leftIdx = -1;
+            let rightIdx = -1;
 
-        // Place units, resolving overlaps
+            for (let j = i - 1; j >= 0; j--) {
+              if (unitPositions[j].idealX !== null) {
+                leftX = unitPositions[j].idealX + unitPositions[j].width;
+                leftIdx = j;
+                break;
+              }
+            }
+
+            for (let j = i + 1; j < unitPositions.length; j++) {
+              if (unitPositions[j].idealX !== null) {
+                rightX = unitPositions[j].idealX;
+                rightIdx = j;
+                break;
+              }
+            }
+
+            // Calculate position based on neighbors
+            if (leftX !== null && rightX !== null) {
+              // Between two positioned siblings - interpolate
+              const gap = rightX - leftX;
+              const unpositionedCount = rightIdx - leftIdx - 1;
+              const posInGap = i - leftIdx;
+              const spacing = gap / (unpositionedCount + 1);
+              unitPositions[i].idealX = leftX + spacing * posInGap;
+            } else if (leftX !== null) {
+              // Only left neighbor - place to the right
+              unitPositions[i].idealX = leftX + HORIZONTAL_SPACING;
+            } else if (rightX !== null) {
+              // Only right neighbor - place to the left
+              unitPositions[i].idealX = rightX - unitPositions[i].width - HORIZONTAL_SPACING;
+            } else {
+              // No neighbors positioned - start at 0
+              unitPositions[i].idealX = 0;
+            }
+          }
+        }
+
+        // Now place units in ORDER (preserving Pass 1 order), adjusting for overlaps
         const placedUnits = [];
 
         for (const up of unitPositions) {
-          let x = up.idealX !== null ? up.idealX : 0;
+          let x = up.idealX;
 
-          // Find a position that doesn't overlap
-          let placed = false;
-          while (!placed) {
-            let overlaps = false;
+          // Check for overlaps with already placed units and shift if needed
+          let needsShift = true;
+          while (needsShift) {
+            needsShift = false;
             for (const pu of placedUnits) {
               const puRight = pu.x + pu.width + HORIZONTAL_SPACING;
               const upRight = x + up.width;
-              if (!(x >= puRight || upRight + HORIZONTAL_SPACING <= pu.x)) {
-                overlaps = true;
+              // Check if overlapping
+              if (!(x >= puRight || upRight <= pu.x - HORIZONTAL_SPACING)) {
+                // Overlap detected - shift right
                 x = Math.max(x, puRight);
+                needsShift = true;
               }
             }
-            if (!overlaps) placed = true;
           }
 
           up.x = x;
