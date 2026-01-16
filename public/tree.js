@@ -165,9 +165,14 @@
     }
 
     // Helper to sort people by their parents (so siblings stay together)
+    // Only sort blood descendants - spouses will be paired with them in createUnits
     function sortByParents(peopleList) {
-      return [...peopleList].sort((a, b) => {
-        // Sort by father_id first, then mother_id, then by their own id
+      // Separate blood descendants from spouses
+      const bloodDescendants = peopleList.filter(p => !p.generation.includes("."));
+      const spouses = peopleList.filter(p => p.generation.includes("."));
+
+      // Sort blood descendants by their parents
+      bloodDescendants.sort((a, b) => {
         const aFather = a.father_id || 0;
         const bFather = b.father_id || 0;
         if (aFather !== bFather) return aFather - bFather;
@@ -178,6 +183,31 @@
 
         return a.id - b.id;
       });
+
+      // Interleave spouses right after their partners
+      const result = [];
+      const usedSpouses = new Set();
+
+      for (const person of bloodDescendants) {
+        result.push(person);
+        // Find any spouses of this person and add them right after
+        for (const spouse of spouses) {
+          if (usedSpouses.has(spouse.id)) continue;
+          if (spouse.spouse_id === person.id || person.spouse_id === spouse.id) {
+            result.push(spouse);
+            usedSpouses.add(spouse.id);
+          }
+        }
+      }
+
+      // Add any remaining spouses at the end (shouldn't happen normally)
+      for (const spouse of spouses) {
+        if (!usedSpouses.has(spouse.id)) {
+          result.push(spouse);
+        }
+      }
+
+      return result;
     }
 
     // BOTTOM-UP: Start from the deepest generation and work up
