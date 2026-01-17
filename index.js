@@ -1,7 +1,7 @@
 require("dotenv").config();
 const port = process.env.PORT || 80;
 const google_client_id =
-  "1016767921529-7km6ac8h3cud3256dqjqha6neiufn2om.apps.googleusercontent.com";
+  "1016767921529-6ht5kllaqo7627qcb9p7fv7vilc66aos.apps.googleusercontent.com";
 const google_client_secret = process.env.GOOGLE_CLIENT_SECRET || "";
 const redirect_uri = process.env.REDIRECT_URI || `http://localhost:${process.env.PORT || 80}/oauth2callback`;
 // npm i express path fs md5 body-parser express-fileupload google-auth-library
