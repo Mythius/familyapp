@@ -130,7 +130,7 @@ app.get("/oauth2callback", async (req, res) => {
     `);
   } catch (error) {
     console.error("Error during OAuth callback:", error);
-    res.status(500).send("Authentication failed");
+    res.status(500).send(`Authentication failed: ${error.message}`);
   }
 });
 
