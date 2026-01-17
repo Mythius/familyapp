@@ -2,6 +2,8 @@ require("dotenv").config();
 const port = process.env.PORT || 80;
 const google_client_id =
   "1016767921529-7km6ac8h3cud3256dqjqha6neiufn2om.apps.googleusercontent.com";
+const google_client_secret = process.env.GOOGLE_CLIENT_SECRET || "";
+const redirect_uri = process.env.REDIRECT_URI || `http://localhost:${process.env.PORT || 80}/oauth2callback`;
 // npm i express path fs md5 body-parser express-fileupload google-auth-library
 const express = require("express");
 const path = require("path");
@@ -13,7 +15,7 @@ const API = require("./api.js");
 const { file, fs } = require("./file.js");
 const { OAuth2Client } = require("google-auth-library");
 const { setServers } = require("dns");
-const client = new OAuth2Client(google_client_id);
+const client = new OAuth2Client(google_client_id, google_client_secret, redirect_uri);
 
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
@@ -59,6 +61,78 @@ function loadAuth() {
 function saveAuth() {
   file.save("auth.json", JSON.stringify(auth));
 }
+
+// OAuth 2.0 authorization endpoint - redirects user to Google
+app.get("/auth/google", (req, res) => {
+  const authUrl = client.generateAuthUrl({
+    access_type: "offline",
+    scope: [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile",
+    ],
+    prompt: "select_account",
+  });
+  res.redirect(authUrl);
+});
+
+// OAuth 2.0 callback endpoint - handles redirect from Google
+app.get("/oauth2callback", async (req, res) => {
+  const { code } = req.query;
+
+  if (!code) {
+    return res.status(400).send("Authorization code not provided");
+  }
+
+  try {
+    // Exchange authorization code for tokens
+    const { tokens } = await client.getToken(code);
+    client.setCredentials(tokens);
+
+    // Verify the ID token and get user info
+    const ticket = await client.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: google_client_id,
+    });
+
+    const payload = ticket.getPayload();
+    const email = payload.email;
+    const name = payload.name;
+
+    // Create or update user session
+    if (!(email in auth)) {
+      auth[email] = { priv: 0, token: "" };
+    }
+    if (auth[email].token) delete sessions[auth[email].token];
+
+    let token = md5(new Date().toISOString() + email);
+    sessions[token] = { user: auth[email] };
+    sessions[token].username = name;
+    sessions[token].google_data = payload;
+    auth[email].token = token;
+    saveAuth();
+
+    if (API.onlogin) API.onlogin(sessions[token]);
+
+    // Redirect to main app with token
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Sign-in successful</title>
+      </head>
+      <body>
+        <script>
+          localStorage.setItem('auth_token', '${token}');
+          window.location.href = '/';
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("Error during OAuth callback:", error);
+    res.status(500).send("Authentication failed");
+  }
+});
 
 app.post("/auth", async (req, res) => {
   const cred = JSON.parse(req.headers.authorization);

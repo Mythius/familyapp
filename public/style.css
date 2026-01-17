@@ -53,6 +53,23 @@ load {
   width: 250px;
 }
 
+#login-redirect {
+  background-color: white;
+  color: #0093ff;
+  border: 2px solid white;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+#login-redirect:hover {
+  background-color: #f0f8ff;
+  transform: scale(1.05);
+}
+
 load.hidden {
   transform: translateY(100%);
   opacity: 0;

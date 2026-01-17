@@ -43,3 +43,8 @@ async function loginGoogle(data){
     localStorage.setItem('auth_token',auth_token);
     return JSON.stringify(dat);
 }
+
+// OAuth 2.0 redirect-based sign-in (works with third-party cookies blocked)
+function googleAuthRedirect() {
+    window.location.href = '/auth/google';
+}
