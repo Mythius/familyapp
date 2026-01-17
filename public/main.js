@@ -672,11 +672,14 @@ $("#create-person").onclick = async () => {
   };
 };
 
-window.addEventListener("popstate", function (event) {
-  // Prevent default back button behavior
-  event.preventDefault();
+// Push initial history state so back button stays in the app
+history.pushState({ page: "home" }, "", window.location.href);
 
-  // Call your custom function
+window.addEventListener("popstate", function (event) {
+  // Push another state so the user can press back again and stay in the app
+  history.pushState({ page: "home" }, "", window.location.href);
+
+  // Navigate to search/home view
   gotoSearch();
 });
 
