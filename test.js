@@ -55,10 +55,52 @@ async function main() {
     console.log(names);
     console.log('...');
 
+    db.file.save('people.csv', people.map(row => row.join(',')).join('\n'));
+
     // Test new permissions endpoint
     const perms = await apiCall('/permissions', token);
     console.log('\nPermissions:', perms);
     console.log('Family Permissions:', perms.family_permissions);
 }
 
+async function testDescendants() {
+    const token = await login('test', 'test');
+    console.log('Logged in with token:', token);
+
+    // Get all people to find Raymond Southwick's ID
+    const people = await apiCall('/people', token);
+
+    // Find Raymond Southwick (header is row 0, so skip it)
+    const raymond = people.find(p => p[2] === 'Raymond Southwick');
+    if (!raymond) {
+        console.log('ERROR: Raymond Southwick not found!');
+        return;
+    }
+    const raymondId = raymond[0];
+    console.log(`\nFound Raymond Southwick with ID: ${raymondId}`);
+
+    // Get descendants of Raymond Southwick
+    const descendantIds = await apiCall(`/descendants/${raymondId}`, token);
+    console.log(`\nDescendants of Raymond Southwick: ${descendantIds.length} people`);
+
+    // Get full details of descendants
+    const descendantNames = descendantIds.map(id => {
+        const person = people.find(p => p[0] === id);
+        return person ? person[2] : `Unknown (ID: ${id})`;
+    });
+
+    console.log('\nAll descendants and their spouses:');
+    descendantNames.forEach(name => console.log(`  - ${name}`));
+
+    // Check if Lauren Southwick is included
+    const laurenIncluded = descendantNames.some(name => name.includes('Lauren'));
+    console.log(`\n*** Lauren Southwick included: ${laurenIncluded ? 'YES ✓' : 'NO ✗'} ***`);
+
+    // Also check for Matthias
+    const matthiasIncluded = descendantNames.some(name => name.includes('Matthias'));
+    console.log(`*** Matthias Southwick included: ${matthiasIncluded ? 'YES ✓' : 'NO ✗'} ***`);
+}
+
+// Run the descendants test
+// testDescendants();
 main();
