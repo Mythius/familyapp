@@ -47,12 +47,12 @@ exports.private = function (app) {
       "family_db",
       `SELECT
         p1.*,
-        p2.name AS father_name,
-        p2.ID AS father_id,
-        p3.name AS mother_name,
-        p3.ID AS mother_id,
-        s.names AS spouse_names,
-        s.IDs AS spouse_ids,
+        ANY_VALUE(p2.name) AS father_name,
+        ANY_VALUE(p2.ID) AS father_id,
+        ANY_VALUE(p3.name) AS mother_name,
+        ANY_VALUE(p3.ID) AS mother_id,
+        ANY_VALUE(s.names) AS spouse_names,
+        ANY_VALUE(s.IDs) AS spouse_ids,
         group_concat(c.names) AS children_names,
         group_concat(c.IDs) AS children_ids
       FROM people p1
