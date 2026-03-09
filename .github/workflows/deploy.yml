@@ -16,4 +16,4 @@ jobs:
           host: msouthwick.com
           username: matthias
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: source ~/.nvm/nvm.sh && bash /home/matthias/Github/familyappupdate.sh
+          script: source ~/.nvm/nvm.sh && bash /home/matthias/Github/familyapp/update.sh
