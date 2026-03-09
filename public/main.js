@@ -280,8 +280,30 @@ async function handleClick(name) {
   } else {
     addressDiv.textContent = "";
   }
-  $("#phone").innerHTML = profile.phone;
-  $("#email").innerHTML = profile.email;
+  const phoneDiv = $("#phone");
+  if (profile.phone) {
+    const phoneLink = document.createElement("a");
+    phoneLink.href = "tel:" + profile.phone;
+    phoneLink.title = "Call";
+    phoneLink.textContent = "📞";
+    phoneLink.style.cssText = "margin-left: 6px; text-decoration: none; font-size: 1em; cursor: pointer;";
+    phoneDiv.textContent = profile.phone;
+    phoneDiv.appendChild(phoneLink);
+  } else {
+    phoneDiv.textContent = "";
+  }
+  const emailDiv = $("#email");
+  if (profile.email) {
+    const emailLink = document.createElement("a");
+    emailLink.href = "mailto:" + profile.email;
+    emailLink.title = "Send Email";
+    emailLink.textContent = "✉️";
+    emailLink.style.cssText = "margin-left: 6px; text-decoration: none; font-size: 1em; cursor: pointer;";
+    emailDiv.textContent = profile.email;
+    emailDiv.appendChild(emailLink);
+  } else {
+    emailDiv.textContent = "";
+  }
   let birth_date = profile.birthday;
   $("#bday").innerHTML =
     birth_date == null
