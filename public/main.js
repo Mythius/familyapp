@@ -315,7 +315,7 @@ async function handleClick(name) {
         });
   $("#age").innerHTML = birth_date
     ? Math.floor((new Date() - new Date(birth_date)) / 31536000000)
-    : "Brirthday not found";
+    : "Birthday not found";
 
   $("#dday").innerHTML =
     profile.death_date == null
