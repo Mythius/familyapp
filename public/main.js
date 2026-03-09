@@ -265,7 +265,21 @@ async function handleClick(name) {
   let profile = profile_list[0];
   gotoProfile();
   $("#name").innerHTML = profile.name;
-  $("#address").innerHTML = profile.address;
+  const addressDiv = $("#address");
+  if (profile.address) {
+    const mapUrl = "https://maps.google.com/?q=" + encodeURIComponent(profile.address);
+    const mapLink = document.createElement("a");
+    mapLink.href = mapUrl;
+    mapLink.target = "_blank";
+    mapLink.rel = "noopener noreferrer";
+    mapLink.title = "Open in Maps";
+    mapLink.textContent = "📍";
+    mapLink.style.cssText = "margin-left: 6px; text-decoration: none; font-size: 1em; cursor: pointer;";
+    addressDiv.textContent = profile.address;
+    addressDiv.appendChild(mapLink);
+  } else {
+    addressDiv.textContent = "";
+  }
   $("#phone").innerHTML = profile.phone;
   $("#email").innerHTML = profile.email;
   let birth_date = profile.birthday;
