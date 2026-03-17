@@ -35,7 +35,7 @@ load {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #0093ff;
+  background: linear-gradient(135deg, #0060cc 0%, #0093ff 50%, #00c6ff 100%);
   width: 100%;
   height: 100%;
   position: fixed;
@@ -43,14 +43,81 @@ load {
   top: 0;
   transform: translateY(0px);
   opacity: 1;
-  transition: all 0.5s;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
   z-index: 99;
   flex-direction: column;
-  gap: 50px;
+  gap: 0;
+  overflow: hidden;
+}
+
+load::before {
+  content: '';
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  top: -150px;
+  right: -150px;
+  pointer-events: none;
+}
+
+load::after {
+  content: '';
+  position: absolute;
+  width: 350px;
+  height: 350px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  bottom: -100px;
+  left: -80px;
+  pointer-events: none;
+}
+
+.load-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 24px;
+  padding: 48px 40px;
+  max-width: 360px;
+  width: 85%;
+  box-shadow: 0 8px 32px rgba(0, 0, 60, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1;
+}
+
+.load-tagline {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+#logo {
+  width: 120px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
 }
 
 #login {
-  width: 250px;
+  width: 220px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+#login:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
 #login-redirect {
