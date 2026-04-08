@@ -591,6 +591,13 @@ async function getFamilyPermissions(email) {
     [email]
   ).catch(() => []);
 
+  // Get families where this user has a person record (implicit editor access)
+  let member = await db.query(
+    "family_db",
+    "select family_id from people where email = ?",
+    [email]
+  ).catch(() => []);
+
   let permissions = {};
 
   // Owners have full access
@@ -602,6 +609,13 @@ async function getFamilyPermissions(email) {
   for (let row of granted) {
     if (!permissions[row.family_id]) {
       permissions[row.family_id] = row.role;
+    }
+  }
+
+  // Members of a tree (email on a person record) get editor access
+  for (let row of member) {
+    if (!permissions[row.family_id]) {
+      permissions[row.family_id] = "editor";
     }
   }
 
