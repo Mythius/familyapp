@@ -591,6 +591,9 @@ async function getFamilyPermissions(email) {
     [email]
   ).catch(() => []);
 
+  // Get families this user genealogically belongs to via the roots traversal
+  let memberFamilyIds = await getFamilyIds(email);
+
   let permissions = {};
 
   // Owners have full access
@@ -602,6 +605,13 @@ async function getFamilyPermissions(email) {
   for (let row of granted) {
     if (!permissions[row.family_id]) {
       permissions[row.family_id] = row.role;
+    }
+  }
+
+  // Members of a tree (determined by roots ancestry traversal) get editor access
+  for (let fid of memberFamilyIds) {
+    if (!permissions[fid]) {
+      permissions[fid] = "editor";
     }
   }
 
