@@ -591,12 +591,8 @@ async function getFamilyPermissions(email) {
     [email]
   ).catch(() => []);
 
-  // Get families where this user has a person record (implicit editor access)
-  let member = await db.query(
-    "family_db",
-    "select family_id from people where email = ?",
-    [email]
-  ).catch(() => []);
+  // Get families this user genealogically belongs to via the roots traversal
+  let memberFamilyIds = await getFamilyIds(email);
 
   let permissions = {};
 
@@ -612,10 +608,10 @@ async function getFamilyPermissions(email) {
     }
   }
 
-  // Members of a tree (email on a person record) get editor access
-  for (let row of member) {
-    if (!permissions[row.family_id]) {
-      permissions[row.family_id] = "editor";
+  // Members of a tree (determined by roots ancestry traversal) get editor access
+  for (let fid of memberFamilyIds) {
+    if (!permissions[fid]) {
+      permissions[fid] = "editor";
     }
   }
 
