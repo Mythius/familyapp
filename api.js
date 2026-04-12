@@ -122,53 +122,58 @@ exports.private = function (app) {
       "spouse_names",
     ];
     for (const key of relationshipFields) {
-      if (body[key]) {
+      if (key in body) {
         if (key === "father_name") {
-          db.query(
-            "family_db",
-            `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
-            [body.father_name, editable_family_ids, name, editable_family_ids]
-          ).catch((err) => {
-            console.error("Error updating father_id:", err);
-          });
-        }
-        if (key === "mother_name") {
-          db.query(
-            "family_db",
-            `UPDATE people SET mother_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
-            [body.mother_name, editable_family_ids, name, editable_family_ids]
-          ).catch((err) => {
-            console.error("Error updating father_id:", err);
-          });
-        }
-        if (key == "spouse_names") {
-          let spouseNames = body.spouse_names.split(",").map((s) => s.trim());
-          for (const spouseName of spouseNames) {
-            await db
-              .query(
-                "family_db",
-                `UPDATE people SET spouse_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
-                [spouseName, editable_family_ids, name, editable_family_ids]
-              )
-              .catch((err) => {
-                console.error("Error updating spouse_id:", err);
-              });
+          if (body.father_name) {
+            await db.query(
+              "family_db",
+              `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
+              [body.father_name, editable_family_ids, name, editable_family_ids]
+            ).catch((err) => console.error("Error updating father_id:", err));
+          } else {
+            // Empty string means remove the parent link
+            await db.query(
+              "family_db",
+              `UPDATE people SET father_id = NULL WHERE name = ? AND family_id IN (?)`,
+              [name, editable_family_ids]
+            ).catch((err) => console.error("Error clearing father_id:", err));
           }
         }
-        if (key == "children_names") {
-          let childrenNames = body.children_names
-            .split(",")
-            .map((c) => c.trim());
+        if (key === "mother_name") {
+          if (body.mother_name) {
+            await db.query(
+              "family_db",
+              `UPDATE people SET mother_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
+              [body.mother_name, editable_family_ids, name, editable_family_ids]
+            ).catch((err) => console.error("Error updating mother_id:", err));
+          } else {
+            // Empty string means remove the parent link
+            await db.query(
+              "family_db",
+              `UPDATE people SET mother_id = NULL WHERE name = ? AND family_id IN (?)`,
+              [name, editable_family_ids]
+            ).catch((err) => console.error("Error clearing mother_id:", err));
+          }
+        }
+        if (key === "spouse_names") {
+          let spouseNames = body.spouse_names.split(",").map((s) => s.trim()).filter(Boolean);
+          for (const spouseName of spouseNames) {
+            await db.query(
+              "family_db",
+              `UPDATE people SET spouse_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
+              [spouseName, editable_family_ids, name, editable_family_ids]
+            ).catch((err) => console.error("Error updating spouse_id:", err));
+          }
+        }
+        if (key === "children_names") {
+          // Set this person as father of each listed child (fixed: name/childName order was reversed)
+          let childrenNames = body.children_names.split(",").map((c) => c.trim()).filter(Boolean);
           for (const childName of childrenNames) {
-            await db
-              .query(
-                "family_db",
-                `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
-                [childName, editable_family_ids, name, editable_family_ids]
-              )
-              .catch((err) => {
-                console.error("Error updating child father_id:", err);
-              });
+            await db.query(
+              "family_db",
+              `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND family_id IN (?)) WHERE name = ? AND family_id IN (?)`,
+              [name, editable_family_ids, childName, editable_family_ids]
+            ).catch((err) => console.error("Error updating child father_id:", err));
           }
         }
       }
@@ -187,7 +192,7 @@ exports.private = function (app) {
         typeof value === "string" ? value.trim() : value,
       ]);
     if (!entries.length) {
-      return res.status(400).json({ error: "No fields to update." });
+      return res.json({ success: true }); // Only relationship fields were updated
     }
     const updates = entries.map(([key]) => `${key} = ?`).join(", ");
     const updateValues = entries.map(([_, value]) => value);

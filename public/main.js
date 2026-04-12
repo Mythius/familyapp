@@ -1,6 +1,36 @@
 const $ = (q) => document.querySelector(q);
 let permissions;
 
+// --- Navigation history (back button stays in-app) ---
+let _navInPopstate = false;
+let _navReady = false;
+
+function _pushNav(screen) {
+  if (_navReady && !_navInPopstate) {
+    history.pushState({ screen }, '');
+  }
+}
+
+function setActiveNav(screen) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const navEl = document.querySelector(`.nav-item[data-screen="${screen}"]`);
+  if (navEl) navEl.classList.add('active');
+}
+
+window.addEventListener('popstate', function (e) {
+  if (!_navReady) return;
+  _navInPopstate = true;
+  const screen = e.state?.screen || 'search';
+  if (screen === 'search') gotoSearch();
+  else if (screen === 'tree') gotoTree();
+  else if (screen === 'calendar') gotoCalendar();
+  else if (screen === 'filters') gotoFilters();
+  else if (screen === 'settings') gotoSettings();
+  else if (screen === 'profile') gotoProfile();
+  _navInPopstate = false;
+});
+// --- End navigation history ---
+
 // Check if user can edit a specific family
 function canEditFamily(familyId) {
   if (!permissions || !permissions.family_permissions) return false;
@@ -52,6 +82,10 @@ async function main() {
       familyIdSelect.appendChild(option);
     });
   });
+  // Initialize history so back button stays in-app
+  history.replaceState({ screen: 'search' }, '');
+  setActiveNav('search');
+  _navReady = true;
 }
 
 let names, all_people;
@@ -64,6 +98,8 @@ function hideAll() {
 }
 
 function gotoSearch() {
+  _pushNav('search');
+  setActiveNav('search');
   hideAll();
   $("search").classList.remove("out");
   $("#search").value = "";
@@ -71,6 +107,7 @@ function gotoSearch() {
 }
 
 function gotoProfile() {
+  _pushNav('profile');
   hideAll();
   $("#profile").classList.remove("out");
 }
@@ -80,6 +117,8 @@ function getIdByName(name) {
 }
 
 function gotoCalendar() {
+  _pushNav('calendar');
+  setActiveNav('calendar');
   hideAll();
   $("#calendar").classList.remove("out");
   populateCalendarMonth();
@@ -121,6 +160,8 @@ function wait(t = 1) {
 }
 
 function gotoTree() {
+  _pushNav('tree');
+  setActiveNav('tree');
   hideAll();
   $("#tree").classList.remove("out");
   setupTreeRootSearch();
@@ -213,6 +254,8 @@ async function updateFamilyRoot(e) {
 }
 
 async function gotoSettings() {
+  _pushNav('settings');
+  setActiveNav('settings');
   hideAll();
   $("#settings").classList.remove("out");
   let familyDiv = $("#my-families");
@@ -503,7 +546,7 @@ function addEditButton(profile) {
           // Relationships
           father_name: relFields[0].getNames()[0] || "",
           mother_name: relFields[0].getNames()[1] || "",
-          // children_names: relFields[1].getNames().join(","),
+          children_names: relFields[1].getNames().join(","),
           spouse_names: relFields[2].getNames().join(","),
         };
         // POST updated data
@@ -821,6 +864,8 @@ let descendantIds = null; // Cached descendant IDs for current filter (array of 
 let descendantGenerations = null; // Map of ID -> generation string when descendant filter is active
 
 function gotoFilters() {
+  _pushNav('filters');
+  setActiveNav('filters');
   hideAll();
   $("#filters").classList.remove("out");
   setupDescendantSearch();
