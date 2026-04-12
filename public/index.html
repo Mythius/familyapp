@@ -197,11 +197,26 @@
   </main>
 
   <footer>
-    <img onclick="gotoSearch()" id="search" src="search.png" alt="" />
-    <img onclick="gotoTree()" src="tree.png" alt="" />
-    <img onclick="gotoCalendar()" id="calendar-icon" src="calendar.png" alt="" />
-    <img onclick="gotoFilters()" src="filter.png" alt="" />
-    <img onclick="gotoSettings()" src="settings.png" alt="" />
+    <div class="nav-item active" data-screen="search" onclick="gotoSearch()">
+      <img src="search.png" alt="" />
+      <span>Search</span>
+    </div>
+    <div class="nav-item" data-screen="tree" onclick="gotoTree()">
+      <img src="tree.png" alt="" />
+      <span>Tree</span>
+    </div>
+    <div class="nav-item" data-screen="calendar" onclick="gotoCalendar()">
+      <img id="calendar-icon" src="calendar.png" alt="" />
+      <span>Calendar</span>
+    </div>
+    <div class="nav-item" data-screen="filters" onclick="gotoFilters()">
+      <img src="filter.png" alt="" />
+      <span>Browse</span>
+    </div>
+    <div class="nav-item" data-screen="settings" onclick="gotoSettings()">
+      <img src="settings.png" alt="" />
+      <span>Settings</span>
+    </div>
   </footer>
 
   <script src="main.js"></script>
