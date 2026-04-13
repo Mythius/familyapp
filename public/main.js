@@ -53,7 +53,6 @@ async function signin() {
 async function skipSignin() {
   let worked = await request("/hello2");
   if (!worked.error) {
-    document.querySelector("#login").src = "autologin.png";
     main();
   }
 }
@@ -668,18 +667,19 @@ let month = new Date().getMonth();
 function renderTable() {
   const table = document.getElementById("table");
   const searchTerm = document.getElementById("search").value.toLowerCase();
+  const emptyState = $("#empty-state");
+  const createBtn = $("#create-person");
 
-  // Clear current table
   table.innerHTML = "";
 
-  // Add header
-  const header = document.createElement("div");
-  header.className = "row header";
-  header.innerHTML = `<div class="cell">Name</div>`;
+  // No people at all — show empty state, hide everything else
+  if (!names || names.length === 0) {
+    emptyState.classList.remove("hidden");
+    createBtn.classList.add("hidden");
+    return;
+  }
+  emptyState.classList.add("hidden");
 
-  // table.appendChild(header);
-
-  // Filtered rows
   const filteredData = !searchTerm
     ? names
     : names.filter((item) => item.name.toLowerCase().includes(searchTerm));
@@ -693,9 +693,9 @@ function renderTable() {
   });
 
   if (filteredData.length === 0) {
-    $("#create-person").classList.remove("hidden");
+    createBtn.classList.remove("hidden");
   } else {
-    $("#create-person").classList.add("hidden");
+    createBtn.classList.add("hidden");
   }
 }
 
@@ -751,16 +751,6 @@ $("#create-person").onclick = async () => {
   };
 };
 
-// Push initial history state so back button stays in the app
-history.pushState({ page: "home" }, "", window.location.href);
-
-window.addEventListener("popstate", function (event) {
-  // Push another state so the user can press back again and stay in the app
-  history.pushState({ page: "home" }, "", window.location.href);
-
-  // Navigate to search/home view
-  gotoSearch();
-});
 
 // Manage family permissions modal
 async function managePermissions(familyId) {
