@@ -115,10 +115,10 @@ exports.private = function (app) {
     let editable_family_ids = await getEditableFamilyIds(req.session);
 
     // Handle relationship fields
-    // For lookups we use visible_people_ids (anyone the user can SEE) so that
-    // cross-family links work even when the target family is view-only.
-    // The outer WHERE still uses editable_family_ids so the user can only
-    // modify records they have write access to.
+    // MySQL error 1093 prevents SELECT from the same table being UPDATEd.
+    // Workaround: wrap the lookup in a derived table alias so MySQL treats
+    // it as a separate scope. We use visible_people_ids for the lookup so
+    // cross-family links work for any person the user can see.
     const visibleIds = req.session.visible_people_ids;
     const relationshipFields = [
       "father_name",
@@ -132,7 +132,7 @@ exports.private = function (app) {
           if (body.father_name) {
             await db.query(
               "family_db",
-              `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND ID IN (?)) WHERE name = ? AND family_id IN (?)`,
+              `UPDATE people SET father_id = (SELECT id FROM (SELECT ID AS id FROM people WHERE name = ? AND ID IN (?)) AS t) WHERE name = ? AND family_id IN (?)`,
               [body.father_name, visibleIds, name, editable_family_ids]
             ).catch((err) => console.error("Error updating father_id:", err));
           } else {
@@ -147,7 +147,7 @@ exports.private = function (app) {
           if (body.mother_name) {
             await db.query(
               "family_db",
-              `UPDATE people SET mother_id = (SELECT ID FROM people WHERE name = ? AND ID IN (?)) WHERE name = ? AND family_id IN (?)`,
+              `UPDATE people SET mother_id = (SELECT id FROM (SELECT ID AS id FROM people WHERE name = ? AND ID IN (?)) AS t) WHERE name = ? AND family_id IN (?)`,
               [body.mother_name, visibleIds, name, editable_family_ids]
             ).catch((err) => console.error("Error updating mother_id:", err));
           } else {
@@ -163,7 +163,7 @@ exports.private = function (app) {
           for (const spouseName of spouseNames) {
             await db.query(
               "family_db",
-              `UPDATE people SET spouse_id = (SELECT ID FROM people WHERE name = ? AND ID IN (?)) WHERE name = ? AND family_id IN (?)`,
+              `UPDATE people SET spouse_id = (SELECT id FROM (SELECT ID AS id FROM people WHERE name = ? AND ID IN (?)) AS t) WHERE name = ? AND family_id IN (?)`,
               [spouseName, visibleIds, name, editable_family_ids]
             ).catch((err) => console.error("Error updating spouse_id:", err));
           }
@@ -171,10 +171,9 @@ exports.private = function (app) {
         if (key === "children_names") {
           let childrenNames = body.children_names.split(",").map((c) => c.trim()).filter(Boolean);
           for (const childName of childrenNames) {
-            // Update the child's record — child must also be editable
             await db.query(
               "family_db",
-              `UPDATE people SET father_id = (SELECT ID FROM people WHERE name = ? AND ID IN (?)) WHERE name = ? AND family_id IN (?)`,
+              `UPDATE people SET father_id = (SELECT id FROM (SELECT ID AS id FROM people WHERE name = ? AND ID IN (?)) AS t) WHERE name = ? AND family_id IN (?)`,
               [name, visibleIds, childName, editable_family_ids]
             ).catch((err) => console.error("Error updating child father_id:", err));
           }
