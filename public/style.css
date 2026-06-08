@@ -807,9 +807,15 @@ button {
 /* ── Profile grid ──────────────────────────────────────────── */
 .profile-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: 1fr;
   gap: 10px;
   margin: 16px 0;
+}
+
+@media (min-width: 600px) {
+  .profile-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .profile-field {
