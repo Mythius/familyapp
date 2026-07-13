@@ -124,13 +124,13 @@ function gotoCalendar() {
 }
 
 function createFamilyDiv(families) {
-  let innerHTML = "";
+  let cards = "";
   for (let family of families) {
     const familyId = family.family_id;
     const role = permissions?.family_permissions?.[familyId] || "viewer";
     const roleLabel = role === "owner" ? "Owner" : role === "editor" ? "Editor" : "Viewer";
 
-    innerHTML += /*html*/ `
+    cards += /*html*/ `
     <div class="fam-id-span">
       <div name="${familyId}" onclick="updateFamilyRoot(this)" style="cursor:pointer">
         <span class="familyName">${familyId}</span>
@@ -144,6 +144,7 @@ function createFamilyDiv(families) {
     </div>
   `;
   }
+  let innerHTML = /*html*/ `<div class="families-grid">${cards}</div>`;
   innerHTML += /*html*/ `
     <button onclick="addFamily()">Add Family</button><hr>
   `;
