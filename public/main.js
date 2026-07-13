@@ -1013,7 +1013,9 @@ function clearFilters() {
 // fully into each child's subtree before moving to the next sibling). Returns a Map of
 // ID -> 1-based position in that traversal, computed over the full visible tree (not
 // just the filtered subset) so ordering stays correct regardless of active filters.
-function computeTreeOrder(allRows) {
+// If rootId is given (the "Descendants of" person), the walk starts there instead of
+// at every genealogical root, so the order matches that person's own subtree.
+function computeTreeOrder(allRows, rootId) {
   let headers = allRows[0];
   let idx = {
     id: headers.indexOf("ID"),
@@ -1095,12 +1097,17 @@ function computeTreeOrder(allRows) {
     }
   }
 
-  let roots = rows.filter(row => num(row[idx.father]) === null && num(row[idx.mother]) === null);
-  roots.sort(birthOrder);
-  for (let root of roots) {
-    visit(num(root[idx.id]));
+  if (rootId !== undefined && rootId !== null && byId.has(rootId)) {
+    visit(rootId);
+  } else {
+    let roots = rows.filter(row => num(row[idx.father]) === null && num(row[idx.mother]) === null);
+    roots.sort(birthOrder);
+    for (let root of roots) {
+      visit(num(root[idx.id]));
+    }
   }
-  // Anything left over (e.g. orphaned data forming a cycle) still gets an order.
+  // Anything left over (e.g. orphaned data, or people outside the chosen root's
+  // subtree) still gets an order so every exported row has a value.
   for (let row of rows) {
     visit(num(row[idx.id]));
   }
@@ -1122,7 +1129,14 @@ function exportToCSV() {
   // Find the generation column index
   let generationColIndex = all_people[0].indexOf("generation");
   let idColIndex = all_people[0].indexOf("ID");
-  let treeOrder = computeTreeOrder(all_people);
+
+  // If "Descendants of" is active, base the tree order on that chosen person
+  // instead of the whole family's genealogical roots.
+  let descendantRootId = $("#filter-descendant-id").value;
+  let treeOrder = computeTreeOrder(
+    all_people,
+    descendantRootId ? Number(descendantRootId) : undefined
+  );
 
   let rows = filteredPeople.map(person => {
     // Clone the person array so we don't modify the original
