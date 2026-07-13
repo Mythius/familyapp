@@ -988,16 +988,40 @@ function renderFilterResults() {
   let table = $("#filter-table");
   let countSpan = $("#filter-count");
 
-  table.innerHTML = "";
   countSpan.textContent = filteredPeople.length;
 
-  filteredPeople.forEach(person => {
-    let row = document.createElement("div");
-    row.className = "row";
-    row.innerHTML = `<div class="cell">${person[2]}</div>`;
-    row.onclick = () => handleClick(person[2]);
-    table.appendChild(row);
+  if (filteredPeople.length === 0) {
+    table.innerHTML = "";
+    return;
+  }
+
+  let { headers, rows } = buildFilteredTableData();
+  let nameColIndex = headers.indexOf("name");
+
+  let html = '<table class="data-table"><thead><tr>';
+  headers.forEach(h => { html += `<th>${escapeHTML(h)}</th>`; });
+  html += "</tr></thead><tbody>";
+  rows.forEach(row => {
+    html += "<tr>";
+    row.forEach(val => { html += `<td>${escapeHTML(val == null ? "" : String(val))}</td>`; });
+    html += "</tr>";
   });
+  html += "</tbody></table>";
+  table.innerHTML = html;
+
+  table.querySelectorAll("tbody tr").forEach((tr, i) => {
+    let name = rows[i][nameColIndex];
+    tr.onclick = () => handleClick(name);
+  });
+}
+
+function escapeHTML(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function clearFilters() {
@@ -1117,18 +1141,17 @@ function computeTreeOrder(allRows, rootId) {
   return orderMap;
 }
 
-function exportToCSV() {
-  if (filteredPeople.length === 0) {
-    alert("No data to export. Please apply filters first.");
-    return;
-  }
-
-  // Use the header row from all_people (first row contains column names)
+// Builds the export-ready {headers, rows} for the currently filtered people:
+// overlays the computed descendant generation, appends tree_order, sorts by it,
+// and drops the legacy family_id column. Shared by the Browse table and the CSV export.
+function buildFilteredTableData() {
   let headers = [...all_people[0], "tree_order"];
 
-  // Find the generation column index
   let generationColIndex = all_people[0].indexOf("generation");
   let idColIndex = all_people[0].indexOf("ID");
+  let dateColIndexes = ["birthday", "marriage_date", "death_date"]
+    .map(name => all_people[0].indexOf(name))
+    .filter(i => i !== -1);
 
   // If "Descendants of" is active, base the tree order on that chosen person
   // instead of the whole family's genealogical roots.
@@ -1152,6 +1175,10 @@ function exportToCSV() {
     }
 
     row.push(treeOrder.get(Number(row[idColIndex])) ?? "");
+
+    // Strip the time component off date columns - just yyyy-mm-dd.
+    dateColIndexes.forEach(i => { row[i] = stripTime(row[i]); });
+
     return row;
   });
 
@@ -1160,12 +1187,23 @@ function exportToCSV() {
   rows.sort((a, b) => (a[a.length - 1] === "" ? Infinity : a[a.length - 1]) -
     (b[b.length - 1] === "" ? Infinity : b[b.length - 1]));
 
-  // family_id is an old internal artifact - drop it from the export.
+  // family_id is an old internal artifact - drop it.
   let familyIdColIndex = all_people[0].indexOf("family_id");
   if (familyIdColIndex !== -1) {
     headers.splice(familyIdColIndex, 1);
     rows.forEach(row => row.splice(familyIdColIndex, 1));
   }
+
+  return { headers, rows };
+}
+
+function exportToCSV() {
+  if (filteredPeople.length === 0) {
+    alert("No data to export. Please apply filters first.");
+    return;
+  }
+
+  let { headers, rows } = buildFilteredTableData();
 
   // Build CSV content
   let csvContent = headers.map(h => escapeCSV(h)).join(",") + "\n";
@@ -1186,6 +1224,13 @@ function exportToCSV() {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+function stripTime(value) {
+  if (value == null) return value;
+  let str = String(value);
+  let tIndex = str.indexOf("T");
+  return tIndex === -1 ? str : str.slice(0, tIndex);
 }
 
 function escapeCSV(str) {
