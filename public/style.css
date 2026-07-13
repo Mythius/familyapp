@@ -297,9 +297,27 @@ button {
   overflow-y: auto;
 }
 
+.families-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+@media (min-width: 600px) {
+  .families-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .families-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 .fam-id-span {
   border: 1px solid #0093ff;
-  margin: 8px 0;
   padding: 12px 14px;
   width: 100%;
   border-radius: 4px;
@@ -1198,6 +1216,17 @@ button {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.settings-support-text {
+  color: #495057;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.settings-support-text a {
+  color: #0093ff;
 }
 
 .section-title {
