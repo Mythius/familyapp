@@ -492,7 +492,38 @@ button {
 
 #filter-table {
   max-height: 300px;
-  overflow-y: auto;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.data-table th,
+.data-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f4f4f4;
+  border-bottom: 2px solid #ccc;
+  z-index: 1;
+}
+
+.data-table tbody tr {
+  cursor: pointer;
+}
+
+.data-table tbody tr:hover {
+  background-color: #f0f8ff;
 }
 
 .export-section {
