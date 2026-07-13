@@ -1009,6 +1009,107 @@ function clearFilters() {
   clearDescendantFilter();
 }
 
+// Depth-first "family order": root(s) -> spouse -> children in birth order (recursing
+// fully into each child's subtree before moving to the next sibling). Returns a Map of
+// ID -> 1-based position in that traversal, computed over the full visible tree (not
+// just the filtered subset) so ordering stays correct regardless of active filters.
+function computeTreeOrder(allRows) {
+  let headers = allRows[0];
+  let idx = {
+    id: headers.indexOf("ID"),
+    father: headers.indexOf("father_id"),
+    mother: headers.indexOf("mother_id"),
+    spouse: headers.indexOf("spouse_id"),
+    birthday: headers.indexOf("birthday"),
+  };
+  let num = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
+
+  let rows = allRows.slice(1);
+  let byId = new Map(rows.map(row => [num(row[idx.id]), row]));
+
+  let spouseMap = new Map();
+  let linkSpouses = (a, b) => {
+    if (!spouseMap.has(a)) spouseMap.set(a, new Set());
+    spouseMap.get(a).add(b);
+  };
+  let childrenMap = new Map();
+  let linkChild = (parentId, childRow) => {
+    if (parentId === null) return;
+    if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+    childrenMap.get(parentId).push(childRow);
+  };
+  for (let row of rows) {
+    let id = num(row[idx.id]);
+    let spouseId = num(row[idx.spouse]);
+    if (spouseId !== null) {
+      linkSpouses(id, spouseId);
+      linkSpouses(spouseId, id);
+    }
+    linkChild(num(row[idx.father]), row);
+    linkChild(num(row[idx.mother]), row);
+  }
+
+  // Oldest first; people without a birthdate sort after dated siblings, by ID.
+  let birthOrder = (a, b) => {
+    let ad = a[idx.birthday], bd = b[idx.birthday];
+    if (ad && bd) {
+      let diff = new Date(ad).getTime() - new Date(bd).getTime();
+      if (diff !== 0) return diff;
+    } else if (ad && !bd) {
+      return -1;
+    } else if (!ad && bd) {
+      return 1;
+    }
+    return num(a[idx.id]) - num(b[idx.id]);
+  };
+
+  let visited = new Set();
+  let order = [];
+  function visit(personId) {
+    if (visited.has(personId) || !byId.has(personId)) return;
+    visited.add(personId);
+    order.push(personId);
+
+    let spouses = Array.from(spouseMap.get(personId) || []).filter(sid => byId.has(sid));
+    for (let sid of spouses) {
+      if (!visited.has(sid)) {
+        visited.add(sid);
+        order.push(sid);
+      }
+    }
+
+    let seenChild = new Set();
+    let children = [];
+    for (let pid of [personId, ...spouses]) {
+      for (let child of (childrenMap.get(pid) || [])) {
+        let cid = num(child[idx.id]);
+        if (!seenChild.has(cid)) {
+          seenChild.add(cid);
+          children.push(child);
+        }
+      }
+    }
+    children.sort(birthOrder);
+    for (let child of children) {
+      visit(num(child[idx.id]));
+    }
+  }
+
+  let roots = rows.filter(row => num(row[idx.father]) === null && num(row[idx.mother]) === null);
+  roots.sort(birthOrder);
+  for (let root of roots) {
+    visit(num(root[idx.id]));
+  }
+  // Anything left over (e.g. orphaned data forming a cycle) still gets an order.
+  for (let row of rows) {
+    visit(num(row[idx.id]));
+  }
+
+  let orderMap = new Map();
+  order.forEach((id, i) => orderMap.set(id, i + 1));
+  return orderMap;
+}
+
 function exportToCSV() {
   if (filteredPeople.length === 0) {
     alert("No data to export. Please apply filters first.");
@@ -1016,15 +1117,14 @@ function exportToCSV() {
   }
 
   // Use the header row from all_people (first row contains column names)
-  let headers = all_people[0];
+  let headers = [...all_people[0], "tree_order"];
 
   // Find the generation column index
-  let generationColIndex = headers.indexOf("generation");
+  let generationColIndex = all_people[0].indexOf("generation");
+  let idColIndex = all_people[0].indexOf("ID");
+  let treeOrder = computeTreeOrder(all_people);
 
-  // Build CSV content
-  let csvContent = headers.map(h => escapeCSV(h)).join(",") + "\n";
-
-  filteredPeople.forEach(person => {
+  let rows = filteredPeople.map(person => {
     // Clone the person array so we don't modify the original
     let row = [...person];
 
@@ -1037,6 +1137,19 @@ function exportToCSV() {
       }
     }
 
+    row.push(treeOrder.get(Number(row[idColIndex])) ?? "");
+    return row;
+  });
+
+  // Rows come out in family order by default; the tree_order column lets the
+  // user re-sort after they've resorted/filtered the sheet themselves.
+  rows.sort((a, b) => (a[a.length - 1] === "" ? Infinity : a[a.length - 1]) -
+    (b[b.length - 1] === "" ? Infinity : b[b.length - 1]));
+
+  // Build CSV content
+  let csvContent = headers.map(h => escapeCSV(h)).join(",") + "\n";
+
+  rows.forEach(row => {
     csvContent += row.map(val => escapeCSV(val)).join(",") + "\n";
   });
 
