@@ -1160,6 +1160,13 @@ function exportToCSV() {
   rows.sort((a, b) => (a[a.length - 1] === "" ? Infinity : a[a.length - 1]) -
     (b[b.length - 1] === "" ? Infinity : b[b.length - 1]));
 
+  // family_id is an old internal artifact - drop it from the export.
+  let familyIdColIndex = all_people[0].indexOf("family_id");
+  if (familyIdColIndex !== -1) {
+    headers.splice(familyIdColIndex, 1);
+    rows.forEach(row => row.splice(familyIdColIndex, 1));
+  }
+
   // Build CSV content
   let csvContent = headers.map(h => escapeCSV(h)).join(",") + "\n";
 
