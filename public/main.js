@@ -681,9 +681,10 @@ function renderTable() {
   }
   emptyState.classList.add("hidden");
 
-  const filteredData = !searchTerm
+  const filteredData = (!searchTerm
     ? names
-    : names.filter((item) => item.name.toLowerCase().includes(searchTerm));
+    : names.filter((item) => item.name.toLowerCase().includes(searchTerm))
+  ).slice().sort((a, b) => a.name.localeCompare(b.name));
 
   filteredData.forEach((item) => {
     const row = document.createElement("div");
