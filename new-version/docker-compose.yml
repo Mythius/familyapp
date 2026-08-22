@@ -5,6 +5,8 @@ services:
       - .env
     environment:
       - REDIS_URL=redis://redis:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "4002:80"
     depends_on:
