@@ -2,3 +2,6 @@
 package-lock.json
 .env
 auth.json
+*.sql
+.DS_Store
+node_modules/
