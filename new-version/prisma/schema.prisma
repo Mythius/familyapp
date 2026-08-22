@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../tools/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// One row per person in the registry. father/mother/spouse are loose,
+// unenforced references to other Person rows (matching the source data,
+// which has no DB-level FK integrity here either — genealogy data is
+// frequently incomplete/orphaned, so a hard FK would block valid inserts).
+model Person {
+  id           Int       @id @default(autoincrement()) @map("ID")
+  familyId     String    @map("family_id")
+  family       Family    @relation(fields: [familyId], references: [familyId])
+  name         String?
+  gender       String?
+  address      String?
+  phone        String?
+  email        String?
+  generation   String?
+  birthday     DateTime? @db.Date
+  motherId     Int?      @map("mother_id")
+  fatherId     Int?      @map("father_id")
+  spouseId     Int?      @map("spouse_id")
+  marriageDate DateTime? @db.Date @map("marriage_date")
+  deathDate    DateTime? @db.Date @map("death_date")
+  maidenName   String?   @map("maiden_name")
+  photo        String?
+  notes        String?
+  order        String?
+  facebook     String?
+  instagram    String?
+  flag1        String?
+  flag2        String?
+
+  @@map("people")
+}
+
+// One row per family tree. Merges the old `roots` (root ancestor pair),
+// `owned_families` (single owner) and `family_permissions` (editor/viewer
+// grants) tables into a single entity — a family's root ancestors and its
+// sharing permissions are both small, family-scoped data that don't need
+// their own tables.
+model Family {
+  id          Int      @id @default(autoincrement())
+  familyId    String   @unique @map("family_id")
+  owner       String?
+  fatherId    Int?     @map("father_id")
+  motherId    Int?     @map("mother_id")
+  // Array of { email: string, role: "editor" | "viewer" }
+  permissions Json     @default("[]")
+  people      Person[]
+
+  @@map("family")
+}
+
+// One row per authenticated user. Renamed from the old `security` table.
+model User {
+  email  String @id
+  role   String @default("user")
+  logins Int    @default(1)
+
+  @@map("users")
+}

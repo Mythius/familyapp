@@ -1,0 +1,76 @@
+# api-lib
+
+A **boilerplate/template** for building API projects — a batteries-included Bun + [Hono](https://hono.dev) backend with authentication, session management, and auto-generated CRUD routes over Prisma already wired up. Clone it and start building your own API on top of it, rather than starting from scratch.
+
+## Features
+
+- **Multi-provider authentication** — local username/password, Google OAuth, Microsoft OAuth, and optional delegation to an external CAS server, all unified into a single session model.
+- **Pluggable sessions** — in-memory by default, or Redis-backed for multi-instance/production use.
+- **Auto-generated REST CRUD** — every model in your `prisma/schema.prisma` automatically gets list/get/paginate/filter/create/update/delete routes, with hooks for per-route permissions and row-level filtering.
+- **Works with Postgres, MySQL, or MariaDB** — picked automatically from your `DATABASE_URL`.
+- **File uploads** and **email sending** (Gmail or Linux `sendmail`) helpers included.
+- **Docker-ready** — `docker-compose.yml` runs the app alongside Postgres and Redis.
+- **Route introspection** at `/endpoints/html` and `/endpoints/json` for a live view of everything registered.
+- A small dependency-free vanilla-JS demo frontend and UI component library under `public/`.
+
+## Getting started
+
+1. Install dependencies:
+   ```
+   bun install
+   ```
+2. Copy `example-env` to `.env` and fill in the values you need (at minimum `DATABASE_URL`). See [CLAUDE.md](CLAUDE.md#environment-variables) for the full list of supported variables.
+3. Generate the Prisma client and push the schema to your database:
+   ```
+   bunx prisma generate
+   bunx prisma db push
+   ```
+4. Run the server:
+   ```
+   bun start
+   ```
+   The server listens on `PORT` (default `3000`).
+
+Alternatively, run everything (app + Postgres + Redis) with Docker:
+```
+docker-compose up --build
+```
+
+## Building on this template
+
+- Add your own routes in [api.ts](api.ts) — `publicRoutes()` for unauthenticated endpoints, `privateRoutes()` for endpoints that require a logged-in session.
+- Define your data model in [prisma/schema.prisma](prisma/schema.prisma) — each model automatically gets a full CRUD API mounted at `/api/<model>`.
+- Everything under [tools/](tools/) (auth, session store, CRUD generator, file upload, mail, Google API helpers) is meant to stay generic — treat it as the reusable "library" layer of the template rather than something to edit per-project.
+
+## Project structure
+
+```
+index.ts        Server entrypoint — wires up static files, auth, and API routes
+api.ts          Your project's routes and business logic (edit this)
+prisma/         Your data model (prisma/schema.prisma)
+tools/          Reusable library internals: auth, sessions, CRUD generator, uploads, mail, Google API
+public/         Demo frontend + vanilla-JS UI component library
+Dockerfile,
+docker-compose.yml,
+entrypoint.sh   Container build and local multi-service deployment
+```
+
+For a deeper architectural walkthrough (intended for AI assistants working in this repo, but useful for humans too), see [CLAUDE.md](CLAUDE.md).
+
+## Family Registry (this project)
+
+This repo is the Postgres/Prisma rebuild of the `prototype/` family-tree app (MySQL + Express). See [CLAUDE.md](CLAUDE.md#family-registry-domain-details) for the full domain model and migration notes. Highlights:
+
+- **Auth**: delegates to an external CAS server (`CAS_SERVER_URL`/`CAS_CLIENT_ID` in `.env`) rather than doing Google OAuth directly.
+- **Schema**: three models — `Person`, `Family` (merges the prototype's `roots` + `owned_families` + `family_permissions` into one row per family, with `permissions` as a JSON array of `{ email, role }`), and `User` (renamed from the prototype's `security`).
+- **Data migration**: `tools/migrate-from-mysql.ts` copies data from the old MySQL database into this schema — see the script's header comment for how it resolves the merge, and CLAUDE.md for the one dropped/skipped legacy row.
+- **Custom routes** in `api.ts` reimplement the prototype's family-visibility/permission logic (`family.ts`) — generic CRUD (`/api/person`, `/api/family`) is also mounted but locked down per-model via `checkCrudPermissions` in `api.ts` so it can't be used to bypass those same rules; `/api/user` is blocked entirely.
+
+## Frontend (`frontend/`)
+
+A Flutter app (web-as-PWA today; the same codebase targets Android/iOS later without a rewrite). It's built to static files and served by this backend's own `./public` — same origin as the API, so the `auth_token` session cookie just works with no CORS setup.
+
+- **Screens**: Search (alphabetical people list + search + create), Profile (view/edit a person, including relationships), Tree (pick a person, pannable/zoomable canvas of their descendants — ported from the prototype's `tree.js` layout algorithm, tap a node to re-root on that person), Calendar (month grid of birthdays, ported from the prototype's `populateCalendarMonth()` — tap a name to jump to their profile), Browse (sortable table + CSV export), Settings (families you belong to, sharing/permissions management).
+- **Auth**: sign-in is a full-page redirect to `/auth/google` (which this backend forwards to the configured CAS server); there's nothing else to wire up client-side — the session cookie set by the CAS callback is picked up on next load.
+- **Rebuilding after a frontend change**: `./build-frontend.sh` (runs `flutter build web` and copies the output into `public/`). This is a manual step, not part of `docker-compose up` / the Dockerfile yet — see CLAUDE.md for why and what a real CI build would need.
+- The template's original vanilla-JS demo frontend was moved to `legacy-template-demo/` (unused, kept only for reference).
