@@ -97,24 +97,73 @@ export function privateRoutes(app: Hono): void {
       }
     }
 
+    // A spouse link is a single spouseId pointer that can live on either
+    // person's row (see getPersonDetail's spouseWhere, which reads both
+    // directions) — so removing a spouse from the list has to clear
+    // whichever side currently holds the link, not just add new ones.
+    if ("spouse_names" in body) {
+      const targetNames = String(body.spouse_names ?? "")
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+      const targets = targetNames.length
+        ? await prisma.person.findMany({ where: { name: { in: targetNames }, id: { in: visibleIds } } })
+        : [];
+      const targetIds = new Set(targets.map((p) => p.id));
+
+      const currentSpouseWhere = person.spouseId
+        ? { OR: [{ id: person.spouseId }, { spouseId: person.id }] }
+        : { spouseId: person.id };
+      const currentSpouses = await prisma.person.findMany({ where: currentSpouseWhere });
+
+      for (const spouse of currentSpouses) {
+        if (targetIds.has(spouse.id)) continue;
+        if (spouse.spouseId === person.id) {
+          await prisma.person.update({ where: { id: spouse.id }, data: { spouseId: null } });
+        }
+        if (person.spouseId === spouse.id) {
+          data.spouseId = null;
+        }
+      }
+      for (const spouse of targets) {
+        if (spouse.spouseId === person.id || person.spouseId === spouse.id) continue;
+        await prisma.person.update({ where: { id: spouse.id }, data: { spouseId: person.id } });
+      }
+    }
+
+    // A child link is the child's own fatherId/motherId pointing back at
+    // this person — same deal: removing a child from the list has to clear
+    // their pointer, not just leave old children permanently attached.
+    if ("children_names" in body) {
+      const targetNames = String(body.children_names ?? "")
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+      const targets = targetNames.length
+        ? await prisma.person.findMany({ where: { name: { in: targetNames }, id: { in: visibleIds } } })
+        : [];
+      const targetIds = new Set(targets.map((p) => p.id));
+
+      const currentChildren = await prisma.person.findMany({
+        where: { OR: [{ fatherId: person.id }, { motherId: person.id }] },
+      });
+      for (const child of currentChildren) {
+        if (targetIds.has(child.id)) continue;
+        const clear: Record<string, unknown> = {};
+        if (child.fatherId === person.id) clear.fatherId = null;
+        if (child.motherId === person.id) clear.motherId = null;
+        if (Object.keys(clear).length) {
+          await prisma.person.update({ where: { id: child.id }, data: clear });
+        }
+      }
+      for (const child of targets) {
+        if (child.fatherId === person.id || child.motherId === person.id) continue;
+        await prisma.person.update({ where: { id: child.id }, data: { fatherId: person.id } });
+      }
+    }
+
     if (Object.keys(data).length > 0) {
       await prisma.person.update({ where: { id: person.id }, data });
-    }
-
-    if (body.spouse_names) {
-      const spouseNames = String(body.spouse_names).split(",").map((s: string) => s.trim()).filter(Boolean);
-      for (const spouseName of spouseNames) {
-        const spouse = await prisma.person.findFirst({ where: { name: spouseName, id: { in: visibleIds } } });
-        if (spouse) await prisma.person.update({ where: { id: spouse.id }, data: { spouseId: person.id } });
-      }
-    }
-
-    if (body.children_names) {
-      const childrenNames = String(body.children_names).split(",").map((s: string) => s.trim()).filter(Boolean);
-      for (const childName of childrenNames) {
-        const child = await prisma.person.findFirst({ where: { name: childName, id: { in: visibleIds } } });
-        if (child) await prisma.person.update({ where: { id: child.id }, data: { fatherId: person.id } });
-      }
     }
 
     return c.json({ success: true });

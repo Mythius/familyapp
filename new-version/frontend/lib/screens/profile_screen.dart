@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -583,11 +584,19 @@ class _FieldTile extends StatelessWidget {
   final VoidCallback? onIconTap;
   final bool fullWidth;
 
+  void _copyToClipboard(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: value));
+    HapticFeedback.mediumImpact();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Copied $label'), duration: const Duration(seconds: 1)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final hasValue = value.trim().isNotEmpty;
-    return Container(
+    final tile = Container(
       width: fullWidth ? double.infinity : 168,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -627,6 +636,12 @@ class _FieldTile extends StatelessWidget {
         ],
       ),
     );
+
+    // Long-press copies the whole value straight to the clipboard — simpler
+    // than text selection for values that are almost always copied whole
+    // (a phone number, an address), and works the same on touch and desktop.
+    if (!hasValue) return tile;
+    return GestureDetector(onLongPress: () => _copyToClipboard(context), child: tile);
   }
 }
 

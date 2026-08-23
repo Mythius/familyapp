@@ -45,7 +45,10 @@ export function buildPersonData(body: Record<string, unknown>): Record<string, u
   const data: Record<string, unknown> = {};
   for (const [snakeKey, prismaKey] of Object.entries(PERSON_FIELD_MAP)) {
     const value = body[snakeKey];
-    if (value === undefined || value === "") continue;
+    // Only "not sent at all" is skipped — an explicit "" is the client
+    // clearing the field, and must still reach the update/create data so
+    // it overwrites whatever was there before.
+    if (value === undefined) continue;
     if (PERSON_DATE_FIELDS.has(snakeKey)) {
       const d = new Date(value as string);
       data[prismaKey] = isNaN(d.getTime()) ? null : d;
