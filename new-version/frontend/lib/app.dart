@@ -84,9 +84,13 @@ class _FamilyRegistryAppState extends State<FamilyRegistryApp> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true);
+    // Sampled from the app's logo (logo.png / assets/icon/app_icon.png) so
+    // the in-app theme matches the app icon/branding instead of the
+    // flutter-create default indigo.
+    const brandColor = Color(0xFF60A7B2);
+    final theme = ThemeData(colorSchemeSeed: brandColor, useMaterial3: true);
     final darkTheme = ThemeData(
-      colorSchemeSeed: Colors.indigo,
+      colorSchemeSeed: brandColor,
       brightness: Brightness.dark,
       useMaterial3: true,
     );
