@@ -35,6 +35,19 @@ class ApiClient {
   final http.Client _client = http.Client();
   String? _token;
 
+  /// Called whenever the backend rejects the current session outright — see
+  /// auth.ts's `setupMiddleware`, the single chokepoint every authenticated
+  /// route passes through. Set by AuthState so any screen's API call (not
+  /// just the startup `/user` check) can trigger an automatic logout once
+  /// the session it's holding is no longer honored by the server.
+  void Function()? onInvalidToken;
+
+  /// Exact error messages `setupMiddleware` returns for a dead/absent
+  /// session (as opposed to other, legitimate 403s like "You don't have
+  /// edit permission for this family", which mean the session is fine but
+  /// the action isn't allowed).
+  static const _invalidTokenMessages = {'Invalid Token', 'No credentials Sent'};
+
   void setToken(String? token) => _token = token;
 
   Future<dynamic> get(String path) => _send('GET', path);
@@ -68,6 +81,17 @@ class ApiClient {
     final message = (data is Map && data['error'] != null)
         ? data['error'].toString()
         : 'Request failed (${response.statusCode})';
+
+    // Skip the logout call itself — it hits this same rejection when the
+    // token was already invalid, which would otherwise recursively
+    // re-trigger onInvalidToken.
+    final isLogoutRequest = method == 'DELETE' && path == '/auth';
+    if (!isLogoutRequest &&
+        response.statusCode == 403 &&
+        _invalidTokenMessages.contains(message)) {
+      onInvalidToken?.call();
+    }
+
     throw ApiException(response.statusCode, message);
   }
 }

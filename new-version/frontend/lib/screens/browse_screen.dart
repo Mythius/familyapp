@@ -18,9 +18,9 @@ class BrowseScreen extends StatefulWidget {
 
 // family_id is deliberately not a display column here — matches the
 // prototype's buildFilteredTableData(), which drops it as "an old internal
-// artifact." It's still available as a filter (see _familyFilter) since that's
-// a genuinely useful way to narrow a multi-family account, just not a column
-// worth showing once you already know which family you filtered to.
+// artifact." It's also not offered as a filter: a person can belong to
+// several families, so filtering by a single family_id isn't intuitive —
+// "Descendants of…" is the intended way to narrow to one branch/family.
 const _columns = [
   'name',
   'generation',
@@ -42,7 +42,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
   List<Person>? _people;
   String? _error;
 
-  String? _familyFilter;
   String? _genderFilter;
   String? _statusFilter; // 'alive' | 'deceased' | null
   String? _hasBirthdayFilter; // 'yes' | 'no' | null
@@ -108,7 +107,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   void _clearFilters() {
     setState(() {
-      _familyFilter = null;
       _genderFilter = null;
       _statusFilter = null;
       _hasBirthdayFilter = null;
@@ -131,7 +129,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
     final ageMax = int.tryParse(_ageMaxController.text);
 
     return _people!.where((p) {
-      if (_familyFilter != null && p.familyId != _familyFilter) return false;
       if (descendantIds != null && !descendantIds.contains(p.id)) return false;
       if (_genderFilter != null && p.gender != _genderFilter) return false;
       if (_statusFilter == 'alive' && p.deathDate != null) return false;
@@ -217,7 +214,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
     if (_error != null) return Center(child: Text(_error!));
     if (_people == null) return const Center(child: CircularProgressIndicator());
 
-    final familyIds = _people!.map((p) => p.familyId).toSet().toList()..sort();
     final namesById = {for (final p in _people!) p.id: p.name};
     final treeOrder = computeTreeOrder(_people!, rootId: _descendantOf?.id);
     final generationOptions = _generationOptions();
@@ -253,8 +249,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    _dropdown<String>('Family', _familyFilter, familyIds,
-                        (v) => setState(() => _familyFilter = v), (v) => v ?? 'All'),
                     _dropdown<String>('Gender', _genderFilter, const ['Male', 'Female'],
                         (v) => setState(() => _genderFilter = v), (v) => v ?? 'All'),
                     _dropdown<String>('Status', _statusFilter, const ['alive', 'deceased'],

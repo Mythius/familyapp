@@ -309,7 +309,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                 ],
               ),
-              Text('Family: $familyId', style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 16),
               _editing ? _editForm() : _viewDetails(isNarrow),
               const Divider(height: 32),

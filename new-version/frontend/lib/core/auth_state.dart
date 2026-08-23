@@ -8,8 +8,11 @@ import 'token_store.dart';
 /// [refresh] rather than mutated in place, so a stale role/grant never lingers
 /// after a permission change elsewhere.
 class AuthState extends ChangeNotifier {
-  AuthState(this._api);
+  AuthState(this._api) {
+    _api.onInvalidToken = _forceLogout;
+  }
   final ApiClient _api;
+  bool _forcingLogout = false;
 
   // Google Cloud's "Web application" OAuth client — the same one the
   // prototype used for its own direct-Google-OAuth login. Reused here as
@@ -117,11 +120,24 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> logout() async {
-    try {
-      await _api.delete('/auth');
-    } catch (_) {
-      // best-effort — clear local state regardless
+  /// Logs out because the server just told us (via [ApiClient.onInvalidToken])
+  /// that the session we're holding is already dead — skips the best-effort
+  /// `DELETE /auth` call, since that would just fail the same way, and
+  /// guards against being called again by other requests failing the same
+  /// way while this is still in flight.
+  void _forceLogout() {
+    if (_forcingLogout) return;
+    _forcingLogout = true;
+    logout(notifyServer: false).whenComplete(() => _forcingLogout = false);
+  }
+
+  Future<void> logout({bool notifyServer = true}) async {
+    if (notifyServer) {
+      try {
+        await _api.delete('/auth');
+      } catch (_) {
+        // best-effort — clear local state regardless
+      }
     }
     if (!kIsWeb) {
       await TokenStore.delete();

@@ -73,7 +73,6 @@ class _PersonPickerDialogState extends State<_PersonPickerDialog> {
                           final p = filtered[i];
                           return ListTile(
                             title: Text(p.name ?? '(no name)'),
-                            subtitle: Text(p.familyId),
                             onTap: () => Navigator.pop(context, p),
                           );
                         },

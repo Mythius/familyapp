@@ -216,7 +216,6 @@ class _TreeScreenState extends State<TreeScreen> {
         return ListTile(
           selected: _selected?.id == p.id,
           title: Text(p.name ?? '(no name)'),
-          subtitle: Text(p.familyId, style: Theme.of(context).textTheme.bodySmall),
           onTap: () => _selectPerson(p),
         );
       },
