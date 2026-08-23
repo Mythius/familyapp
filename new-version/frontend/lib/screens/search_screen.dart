@@ -82,12 +82,14 @@ class _SearchScreenState extends State<SearchScreen> {
     );
 
     if (created != true || nameController.text.trim().isEmpty) return;
+    final name = nameController.text.trim();
     try {
       await widget.api.post('/people', {
-        'name': nameController.text.trim(),
+        'name': name,
         'family_id': familyId,
       });
       await _load();
+      if (mounted) context.go('/person/${Uri.encodeComponent(name)}');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
