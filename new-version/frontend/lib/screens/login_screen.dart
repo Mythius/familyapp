@@ -49,9 +49,14 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.family_restroom, size: 72),
-            const SizedBox(height: 16),
-            Text('Family Registry', style: Theme.of(context).textTheme.headlineMedium),
+            ClipOval(
+              child: Image.asset(
+                'assets/icon/app_icon.png',
+                width: 96,
+                height: 96,
+                fit: BoxFit.cover,
+              ),
+            ),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _signingIn ? null : (kIsWeb ? _signInWeb : _signInMobile),
