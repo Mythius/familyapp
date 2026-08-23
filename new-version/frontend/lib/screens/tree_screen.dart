@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../core/api_client.dart';
 import '../core/auth_state.dart';
 import '../models/person.dart';
@@ -12,9 +13,14 @@ import '../tree/tree_painter.dart';
 const double _kTopPadding = 24;
 
 class TreeScreen extends StatefulWidget {
-  const TreeScreen({super.key, required this.api, required this.auth});
+  const TreeScreen({super.key, required this.api, required this.auth, this.initialPersonName});
   final ApiClient api;
   final AuthState auth;
+
+  /// When set (e.g. arriving via a "View in tree" link from a profile page),
+  /// the tree re-roots on this person as soon as the people list loads,
+  /// instead of showing the empty "pick a starting person" canvas.
+  final String? initialPersonName;
 
   @override
   State<TreeScreen> createState() => _TreeScreenState();
@@ -61,6 +67,11 @@ class _TreeScreenState extends State<TreeScreen> {
         _peopleById = {for (final p in people) p.id: p};
         _loadingPeople = false;
       });
+      final initialName = widget.initialPersonName;
+      if (initialName != null) {
+        final matches = people.where((p) => p.name == initialName);
+        if (matches.isNotEmpty) _selectPerson(matches.first);
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -258,7 +269,9 @@ class _TreeScreenState extends State<TreeScreen> {
                       top: pos.y,
                       child: TreeNodeWidget(
                         node: pos.node,
-                        onTap: () => _selectPerson(pos.node.person),
+                        onTap: () => context.go(
+                          '/person/${Uri.encodeComponent(pos.node.person.name ?? '')}',
+                        ),
                       ),
                     ),
                 ],

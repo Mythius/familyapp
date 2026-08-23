@@ -53,7 +53,14 @@ class _FamilyRegistryAppState extends State<FamilyRegistryApp> {
                 name: state.pathParameters['name']!,
               ),
             ),
-            GoRoute(path: '/tree', builder: (context, state) => TreeScreen(api: _api, auth: _auth)),
+            GoRoute(
+              path: '/tree',
+              builder: (context, state) => TreeScreen(
+                api: _api,
+                auth: _auth,
+                initialPersonName: state.uri.queryParameters['person'],
+              ),
+            ),
             GoRoute(path: '/calendar', builder: (context, state) => CalendarScreen(api: _api)),
             GoRoute(path: '/browse', builder: (context, state) => BrowseScreen(api: _api)),
             GoRoute(

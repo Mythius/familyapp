@@ -137,7 +137,6 @@ class _SearchScreenState extends State<SearchScreen> {
                         final p = filtered[i];
                         return ListTile(
                           title: Text(p.name ?? '(no name)'),
-                          subtitle: Text(p.familyId),
                           trailing: widget.auth.canEdit(p.familyId)
                               ? const Icon(Icons.edit, size: 16)
                               : null,

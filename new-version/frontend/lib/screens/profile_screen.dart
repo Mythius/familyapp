@@ -273,6 +273,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                   ),
+                  IconButton(
+                    tooltip: 'View in tree',
+                    icon: const Icon(Icons.account_tree_outlined),
+                    onPressed: () => context.go(
+                      '/tree?person=${Uri.encodeComponent(_person!['name']?.toString() ?? '')}',
+                    ),
+                  ),
                   if (canEdit)
                     _editing
                         ? Row(
