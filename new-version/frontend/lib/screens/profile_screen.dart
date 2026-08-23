@@ -388,9 +388,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               label: 'Phone',
               value: _controllers['phone']!.text,
               fullWidth: isNarrow,
-              icon: Icons.call_outlined,
-              iconTooltip: 'Call',
-              onIconTap: () => launchUrl(Uri.parse('tel:${_controllers['phone']!.text}')),
+              icon: Icons.sms_outlined,
+              iconTooltip: 'Text',
+              onIconTap: () => launchUrl(Uri.parse('sms:${_controllers['phone']!.text}')),
             ),
             _FieldTile(
               label: 'Email',
