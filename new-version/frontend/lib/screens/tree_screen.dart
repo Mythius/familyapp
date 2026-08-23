@@ -30,7 +30,13 @@ class _TreeScreenState extends State<TreeScreen> {
   bool _loadingTree = false;
   String? _error;
   String _query = '';
+  bool _listExpanded = false;
   final TransformationController _viewController = TransformationController();
+
+  /// Below this width there's no room for the side-by-side name list + tree
+  /// canvas layout — stack the search/list above the tree instead, with the
+  /// list collapsible so it doesn't permanently eat space the tree needs.
+  static const double _narrowBreakpoint = 800;
 
   @override
   void initState() {
@@ -68,6 +74,10 @@ class _TreeScreenState extends State<TreeScreen> {
       _selected = p;
       _positions = null;
       _loadingTree = true;
+      // Once a person is picked there's nothing left to search for — collapse
+      // the list so the tree gets the full screen (matters most on narrow
+      // layouts, where the list and tree share vertical space).
+      _listExpanded = false;
     });
     try {
       final data = await widget.api.get('/descendants/${p.id}') as Map;
@@ -117,6 +127,47 @@ class _TreeScreenState extends State<TreeScreen> {
             .where((p) => (p.name ?? '').toLowerCase().contains(_query.toLowerCase()))
             .toList();
 
+    final isNarrow = MediaQuery.sizeOf(context).width < _narrowBreakpoint;
+    if (isNarrow) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Find a starting person…',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onChanged: (v) => setState(() {
+                      _query = v;
+                      if (v.isNotEmpty) _listExpanded = true;
+                    }),
+                  ),
+                ),
+                IconButton(
+                  tooltip: _listExpanded ? 'Hide list' : 'Show list',
+                  icon: Icon(_listExpanded ? Icons.expand_less : Icons.expand_more),
+                  onPressed: () => setState(() => _listExpanded = !_listExpanded),
+                ),
+              ],
+            ),
+          ),
+          if (_listExpanded)
+            SizedBox(
+              height: 280,
+              child: _buildPeopleList(filtered),
+            ),
+          const Divider(height: 1),
+          Expanded(child: _buildCanvas()),
+        ],
+      );
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -136,26 +187,28 @@ class _TreeScreenState extends State<TreeScreen> {
                   onChanged: (v) => setState(() => _query = v),
                 ),
               ),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: filtered.length,
-                  itemBuilder: (context, i) {
-                    final p = filtered[i];
-                    return ListTile(
-                      selected: _selected?.id == p.id,
-                      title: Text(p.name ?? '(no name)'),
-                      subtitle: Text(p.familyId, style: Theme.of(context).textTheme.bodySmall),
-                      onTap: () => _selectPerson(p),
-                    );
-                  },
-                ),
-              ),
+              Expanded(child: _buildPeopleList(filtered)),
             ],
           ),
         ),
         const VerticalDivider(width: 1),
         Expanded(child: _buildCanvas()),
       ],
+    );
+  }
+
+  Widget _buildPeopleList(List<Person> filtered) {
+    return ListView.builder(
+      itemCount: filtered.length,
+      itemBuilder: (context, i) {
+        final p = filtered[i];
+        return ListTile(
+          selected: _selected?.id == p.id,
+          title: Text(p.name ?? '(no name)'),
+          subtitle: Text(p.familyId, style: Theme.of(context).textTheme.bodySmall),
+          onTap: () => _selectPerson(p),
+        );
+      },
     );
   }
 

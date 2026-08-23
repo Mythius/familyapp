@@ -6,6 +6,7 @@ import '../core/api_client.dart';
 import '../core/csv_export/csv_export.dart';
 import '../models/person.dart';
 import '../widgets/person_picker.dart';
+import 'contact_select_screen.dart';
 
 class BrowseScreen extends StatefulWidget {
   const BrowseScreen({super.key, required this.api});
@@ -45,11 +46,14 @@ class _BrowseScreenState extends State<BrowseScreen> {
   String? _genderFilter;
   String? _statusFilter; // 'alive' | 'deceased' | null
   String? _hasBirthdayFilter; // 'yes' | 'no' | null
+  String? _generationFilter;
   final _ageMinController = TextEditingController();
   final _ageMaxController = TextEditingController();
 
   Person? _descendantOf;
   Map<String, dynamic>? _descendantGenerations;
+
+  bool _filtersExpanded = true;
 
   @override
   void initState() {
@@ -83,6 +87,11 @@ class _BrowseScreenState extends State<BrowseScreen> {
       setState(() {
         _descendantOf = picked;
         _descendantGenerations = data.cast<String, dynamic>();
+        // The set of valid generation labels changes shape (own stored
+        // generation vs. tree-relative "2.1"-style labels) whenever the
+        // descendant root changes, so a filter picked under the old scheme
+        // may no longer be a valid dropdown item.
+        _generationFilter = null;
       });
     } catch (e) {
       if (mounted) {
@@ -94,6 +103,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   void _clearDescendantOf() => setState(() {
         _descendantOf = null;
         _descendantGenerations = null;
+        _generationFilter = null;
       });
 
   void _clearFilters() {
@@ -102,11 +112,18 @@ class _BrowseScreenState extends State<BrowseScreen> {
       _genderFilter = null;
       _statusFilter = null;
       _hasBirthdayFilter = null;
+      _generationFilter = null;
       _ageMinController.clear();
       _ageMaxController.clear();
     });
     _clearDescendantOf();
   }
+
+  /// The generation label to filter/display for a person — the descendant
+  /// tree's per-render generation ("2.1" for a spouse) when a "descendants
+  /// of" root is set, otherwise the person's own stored generation.
+  String? _generationOf(Person p) =>
+      _descendantGenerations != null ? _descendantGenerations![p.id.toString()]?.toString() : p.generation;
 
   List<Person> get _filtered {
     final descendantIds = _descendantGenerations?.keys.map(int.parse).toSet();
@@ -121,6 +138,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
       if (_statusFilter == 'deceased' && p.deathDate == null) return false;
       if (_hasBirthdayFilter == 'yes' && p.birthday == null) return false;
       if (_hasBirthdayFilter == 'no' && p.birthday != null) return false;
+      if (_generationFilter != null && _generationOf(p) != _generationFilter) return false;
       if (ageMin != null || ageMax != null) {
         if (p.birthday == null) return false;
         final age = _ageOf(p.birthday!);
@@ -177,6 +195,23 @@ class _BrowseScreenState extends State<BrowseScreen> {
     downloadCsv('family_export_$today.csv', buffer.toString());
   }
 
+  List<String> _generationOptions() {
+    final values = _people!.map(_generationOf).whereType<String>().toSet().toList();
+    values.sort((a, b) {
+      final na = double.tryParse(a);
+      final nb = double.tryParse(b);
+      if (na != null && nb != null) return na.compareTo(nb);
+      return a.compareTo(b);
+    });
+    return values;
+  }
+
+  void _openContactSelect(List<Person> rows, ContactMode mode) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ContactSelectScreen(people: rows, mode: mode)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) return Center(child: Text(_error!));
@@ -185,6 +220,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
     final familyIds = _people!.map((p) => p.familyId).toSet().toList()..sort();
     final namesById = {for (final p in _people!) p.id: p.name};
     final treeOrder = computeTreeOrder(_people!, rootId: _descendantOf?.id);
+    final generationOptions = _generationOptions();
 
     final rows = _filtered
       ..sort((a, b) => (treeOrder[a.id] ?? 1 << 30).compareTo(treeOrder[b.id] ?? 1 << 30));
@@ -192,12 +228,27 @@ class _BrowseScreenState extends State<BrowseScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Expanded(
-                child: Wrap(
+              IconButton(
+                tooltip: _filtersExpanded ? 'Hide filters' : 'Show filters',
+                icon: Icon(_filtersExpanded ? Icons.expand_less : Icons.expand_more),
+                onPressed: () => setState(() => _filtersExpanded = !_filtersExpanded),
+              ),
+              Text('Filters', style: Theme.of(context).textTheme.titleSmall),
+              const Spacer(),
+              Text('${rows.length} people', style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+        if (_filtersExpanded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
                   spacing: 12,
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -212,6 +263,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
                     _dropdown<String>('Has birthday', _hasBirthdayFilter, const ['yes', 'no'],
                         (v) => setState(() => _hasBirthdayFilter = v),
                         (v) => v == null ? 'All' : (v == 'yes' ? 'Yes' : 'No')),
+                    _dropdown<String>('Generation', _generationFilter, generationOptions,
+                        (v) => setState(() => _generationFilter = v), (v) => v ?? 'All'),
                     SizedBox(
                       width: 90,
                       child: TextField(
@@ -243,20 +296,33 @@ class _BrowseScreenState extends State<BrowseScreen> {
                     TextButton(onPressed: _clearFilters, child: const Text('Clear filters')),
                   ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Text('${rows.length} people', style: Theme.of(context).textTheme.bodySmall),
-              if (kIsWeb) ...[
-                const SizedBox(width: 12),
-                FilledButton.icon(
-                  onPressed: () => _export(rows, namesById, treeOrder),
-                  icon: const Icon(Icons.download),
-                  label: const Text('Export CSV'),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: rows.isEmpty ? null : () => _openContactSelect(rows, ContactMode.text),
+                      icon: const Icon(Icons.sms_outlined, size: 16),
+                      label: const Text('Text selected…'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: rows.isEmpty ? null : () => _openContactSelect(rows, ContactMode.email),
+                      icon: const Icon(Icons.email_outlined, size: 16),
+                      label: const Text('Email selected…'),
+                    ),
+                    if (kIsWeb)
+                      FilledButton.icon(
+                        onPressed: () => _export(rows, namesById, treeOrder),
+                        icon: const Icon(Icons.download),
+                        label: const Text('Export CSV'),
+                      ),
+                  ],
                 ),
               ],
-            ],
+            ),
           ),
-        ),
         const Divider(height: 1),
         Expanded(
           child: SingleChildScrollView(

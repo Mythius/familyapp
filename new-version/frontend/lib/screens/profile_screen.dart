@@ -242,6 +242,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  /// Below this width the profile switches from a wrapping grid of field
+  /// tiles to one full-width tile per line — a grid of 168px tiles just
+  /// leaves an awkward half-empty row on a phone-width screen.
+  static const double _narrowBreakpoint = 600;
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) return Center(child: Text(_error!));
@@ -249,6 +254,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final familyId = _person!['familyId'] as String;
     final canEdit = widget.auth.canEdit(familyId);
+    final isNarrow = MediaQuery.sizeOf(context).width < _narrowBreakpoint;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -298,16 +304,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               Text('Family: $familyId', style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 16),
-              _editing ? _editForm() : _viewDetails(),
+              _editing ? _editForm() : _viewDetails(isNarrow),
               const Divider(height: 32),
               Text('Relationships', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
+              _tileGroup(
+                isNarrow: isNarrow,
+                tiles: [
                   _relationshipTile(
                     label: 'Father',
+                    fullWidth: isNarrow,
                     content: _singleRelationshipContent(
                       value: _fatherName,
                       onChange: _editing ? _pickFather : null,
@@ -318,6 +324,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _relationshipTile(
                     label: 'Mother',
+                    fullWidth: isNarrow,
                     content: _singleRelationshipContent(
                       value: _motherName,
                       onChange: _editing ? _pickMother : null,
@@ -357,22 +364,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// Read-only view: every field always shows as a tile (label + value, or a
   /// muted "—" placeholder) — nothing disappears just because it's unset.
-  Widget _viewDetails() {
+  /// On a narrow (phone-width) screen the tiles stack one per line instead
+  /// of wrapping into a grid.
+  Widget _viewDetails(bool isNarrow) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _FieldTile(label: 'Gender', value: _controllers['gender']!.text),
-            _FieldTile(label: 'Birthday', value: _displayDate('birthday')),
-            _FieldTile(label: 'Age', value: _displayAge()),
-            _FieldTile(label: 'Death date', value: _displayDate('death_date')),
-            _FieldTile(label: 'Maiden name', value: _controllers['maiden_name']!.text),
+        _tileGroup(
+          isNarrow: isNarrow,
+          tiles: [
+            _FieldTile(label: 'Gender', value: _controllers['gender']!.text, fullWidth: isNarrow),
+            _FieldTile(label: 'Birthday', value: _displayDate('birthday'), fullWidth: isNarrow),
+            _FieldTile(label: 'Age', value: _displayAge(), fullWidth: isNarrow),
+            _FieldTile(label: 'Death date', value: _displayDate('death_date'), fullWidth: isNarrow),
+            _FieldTile(label: 'Maiden name', value: _controllers['maiden_name']!.text, fullWidth: isNarrow),
             _FieldTile(
               label: 'Phone',
               value: _controllers['phone']!.text,
+              fullWidth: isNarrow,
               icon: Icons.call_outlined,
               iconTooltip: 'Call',
               onIconTap: () => launchUrl(Uri.parse('tel:${_controllers['phone']!.text}')),
@@ -380,12 +389,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _FieldTile(
               label: 'Email',
               value: _controllers['email']!.text,
+              fullWidth: isNarrow,
               icon: Icons.email_outlined,
               iconTooltip: 'Send email',
               onIconTap: () => launchUrl(Uri.parse('mailto:${_controllers['email']!.text}')),
             ),
-            _FieldTile(label: 'Facebook', value: _controllers['facebook']!.text),
-            _FieldTile(label: 'Instagram', value: _controllers['instagram']!.text),
+            _FieldTile(label: 'Facebook', value: _controllers['facebook']!.text, fullWidth: isNarrow),
+            _FieldTile(label: 'Instagram', value: _controllers['instagram']!.text, fullWidth: isNarrow),
           ],
         ),
         const SizedBox(height: 10),
@@ -401,6 +411,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 10),
         _FieldTile(label: 'Notes', value: _controllers['notes']!.text, fullWidth: true),
+      ],
+    );
+  }
+
+  /// Lays a set of tiles out as a wrapping grid on wide screens, or a single
+  /// stacked column (one tile per line) on narrow ones.
+  Widget _tileGroup({required bool isNarrow, required List<Widget> tiles}) {
+    if (!isNarrow) {
+      return Wrap(spacing: 10, runSpacing: 10, children: tiles);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final tile in tiles) ...[tile, const SizedBox(height: 10)],
       ],
     );
   }
