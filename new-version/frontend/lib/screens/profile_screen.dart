@@ -161,6 +161,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _save() async {
+    final newName = _controllers['name']!.text.trim();
+    if (newName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Name is required.')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       final body = <String, dynamic>{
@@ -172,7 +179,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       };
       await widget.api.post('/people/${Uri.encodeComponent(widget.name)}', body);
       setState(() => _editing = false);
-      await _load();
+      if (newName != widget.name) {
+        // The profile route is keyed by name, and the name we loaded this
+        // screen with no longer resolves now that the rename succeeded —
+        // navigate to the new name's route rather than re-fetching the old one.
+        if (mounted) context.go('/person/${Uri.encodeComponent(newName)}');
+      } else {
+        await _load();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -442,14 +456,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       children: [
         for (final (key, label) in _scalarFields)
-          if (key != 'name')
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: TextField(
-                controller: _controllers[key],
-                decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-              ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: TextField(
+              controller: _controllers[key],
+              decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
             ),
+          ),
       ],
     );
   }
