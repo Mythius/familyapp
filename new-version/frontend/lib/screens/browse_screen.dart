@@ -21,22 +21,35 @@ class BrowseScreen extends StatefulWidget {
 // artifact." It's also not offered as a filter: a person can belong to
 // several families, so filtering by a single family_id isn't intuitive —
 // "Descendants of…" is the intended way to narrow to one branch/family.
-const _columns = [
-  'name',
-  'generation',
-  'gender',
-  'birthday',
-  'deathDate',
-  'maidenName',
-  'address',
-  'phone',
-  'email',
-  'marriageDate',
-  'fatherName',
-  'motherName',
-  'spouseNames',
-  'treeOrder',
+//
+// Fixed pixel widths (rather than DataTable's auto-sizing-by-content) are
+// what let the table body below be a plain ListView.builder instead of a
+// DataTable — DataTable lays out and builds every row up front with no
+// virtualization, which gets sluggish once a family tree has a few hundred
+// people (every keystroke in a filter field was rebuilding all of them).
+class _ColumnSpec {
+  const _ColumnSpec(this.key, this.width);
+  final String key;
+  final double width;
+}
+
+const _columnSpecs = [
+  _ColumnSpec('name', 160),
+  _ColumnSpec('generation', 90),
+  _ColumnSpec('gender', 90),
+  _ColumnSpec('birthday', 110),
+  _ColumnSpec('deathDate', 110),
+  _ColumnSpec('maidenName', 140),
+  _ColumnSpec('address', 220),
+  _ColumnSpec('phone', 130),
+  _ColumnSpec('email', 200),
+  _ColumnSpec('marriageDate', 110),
+  _ColumnSpec('fatherName', 150),
+  _ColumnSpec('motherName', 150),
+  _ColumnSpec('spouseNames', 150),
+  _ColumnSpec('treeOrder', 80),
 ];
+final _columns = _columnSpecs.map((c) => c.key).toList();
 
 class _BrowseScreenState extends State<BrowseScreen> {
   List<Person>? _people;
@@ -192,7 +205,21 @@ class _BrowseScreenState extends State<BrowseScreen> {
     downloadCsv('family_export_$today.csv', buffer.toString());
   }
 
+  // Both of these scan the full (unfiltered) people list, so they're worth
+  // caching — otherwise every keystroke in an unrelated filter field (which
+  // triggers a setState/rebuild but doesn't change the underlying data)
+  // would redo the full-list work for no reason. Identity comparison is
+  // enough here since _people/_descendantGenerations/_descendantOf are only
+  // ever replaced wholesale (via setState), never mutated in place.
+  List<Person>? _generationOptionsForPeople;
+  Map<String, dynamic>? _generationOptionsForGenerations;
+  List<String>? _cachedGenerationOptions;
+
   List<String> _generationOptions() {
+    if (identical(_generationOptionsForPeople, _people) &&
+        identical(_generationOptionsForGenerations, _descendantGenerations)) {
+      return _cachedGenerationOptions!;
+    }
     final values = _people!.map(_generationOf).whereType<String>().toSet().toList();
     values.sort((a, b) {
       final na = double.tryParse(a);
@@ -200,7 +227,25 @@ class _BrowseScreenState extends State<BrowseScreen> {
       if (na != null && nb != null) return na.compareTo(nb);
       return a.compareTo(b);
     });
+    _generationOptionsForPeople = _people;
+    _generationOptionsForGenerations = _descendantGenerations;
+    _cachedGenerationOptions = values;
     return values;
+  }
+
+  List<Person>? _treeOrderForPeople;
+  int? _treeOrderForRootId;
+  Map<int, int>? _cachedTreeOrder;
+
+  Map<int, int> _treeOrder() {
+    if (identical(_treeOrderForPeople, _people) && _treeOrderForRootId == _descendantOf?.id) {
+      return _cachedTreeOrder!;
+    }
+    final result = computeTreeOrder(_people!, rootId: _descendantOf?.id);
+    _treeOrderForPeople = _people;
+    _treeOrderForRootId = _descendantOf?.id;
+    _cachedTreeOrder = result;
+    return result;
   }
 
   void _openContactSelect(List<Person> rows, ContactMode mode) {
@@ -215,7 +260,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
     if (_people == null) return const Center(child: CircularProgressIndicator());
 
     final namesById = {for (final p in _people!) p.id: p.name};
-    final treeOrder = computeTreeOrder(_people!, rootId: _descendantOf?.id);
+    final treeOrder = _treeOrder();
     final generationOptions = _generationOptions();
 
     final rows = _filtered
@@ -318,24 +363,61 @@ class _BrowseScreenState extends State<BrowseScreen> {
             ),
           ),
         const Divider(height: 1),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SingleChildScrollView(
-              child: DataTable(
-                columns: _columns.map((c) => DataColumn(label: Text(c))).toList(),
-                rows: rows
-                    .map((p) => DataRow(
-                          cells: _columns
-                              .map((c) => DataCell(Text(_cell(p, c, namesById, treeOrder))))
-                              .toList(),
-                        ))
-                    .toList(),
+        Expanded(child: _buildTable(rows, namesById, treeOrder)),
+      ],
+    );
+  }
+
+  /// A plain fixed-column table with a lazily-built (ListView.builder) body —
+  /// unlike DataTable, only the rows actually on screen get built, which is
+  /// what keeps Browse responsive once there are a few hundred people.
+  Widget _buildTable(List<Person> rows, Map<int, String?> namesById, Map<int, int> treeOrder) {
+    final scheme = Theme.of(context).colorScheme;
+    final totalWidth = _columnSpecs.fold<double>(0, (sum, c) => sum + c.width);
+
+    Widget cellText(String text, {TextStyle? style}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Text(text, style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
+        );
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: totalWidth,
+        child: Column(
+          children: [
+            Container(
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              child: Row(
+                children: [
+                  for (final c in _columnSpecs)
+                    SizedBox(width: c.width, child: cellText(c.key, style: const TextStyle(fontWeight: FontWeight.bold))),
+                ],
               ),
             ),
-          ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                itemCount: rows.length,
+                itemBuilder: (context, i) {
+                  final p = rows[i];
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.5))),
+                    ),
+                    child: Row(
+                      children: [
+                        for (final c in _columnSpecs)
+                          SizedBox(width: c.width, child: cellText(_cell(p, c.key, namesById, treeOrder))),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
