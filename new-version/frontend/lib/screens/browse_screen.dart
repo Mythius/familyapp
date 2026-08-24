@@ -58,7 +58,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   String? _genderFilter;
   String? _statusFilter; // 'alive' | 'deceased' | null
   String? _hasBirthdayFilter; // 'yes' | 'no' | null
-  String? _generationFilter;
+  Set<String> _generationFilter = {};
   final _ageMinController = TextEditingController();
   final _ageMaxController = TextEditingController();
 
@@ -103,7 +103,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
         // generation vs. tree-relative "2.1"-style labels) whenever the
         // descendant root changes, so a filter picked under the old scheme
         // may no longer be a valid dropdown item.
-        _generationFilter = null;
+        _generationFilter = {};
       });
     } catch (e) {
       if (mounted) {
@@ -115,7 +115,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   void _clearDescendantOf() => setState(() {
         _descendantOf = null;
         _descendantGenerations = null;
-        _generationFilter = null;
+        _generationFilter = {};
       });
 
   void _clearFilters() {
@@ -123,7 +123,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
       _genderFilter = null;
       _statusFilter = null;
       _hasBirthdayFilter = null;
-      _generationFilter = null;
+      _generationFilter = {};
       _ageMinController.clear();
       _ageMaxController.clear();
     });
@@ -148,7 +148,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
       if (_statusFilter == 'deceased' && p.deathDate == null) return false;
       if (_hasBirthdayFilter == 'yes' && p.birthday == null) return false;
       if (_hasBirthdayFilter == 'no' && p.birthday != null) return false;
-      if (_generationFilter != null && _generationOf(p) != _generationFilter) return false;
+      if (_generationFilter.isNotEmpty && !_generationFilter.contains(_generationOf(p))) return false;
       if (ageMin != null || ageMax != null) {
         if (p.birthday == null) return false;
         final age = _ageOf(p.birthday!);
@@ -302,8 +302,12 @@ class _BrowseScreenState extends State<BrowseScreen> {
                     _dropdown<String>('Has birthday', _hasBirthdayFilter, const ['yes', 'no'],
                         (v) => setState(() => _hasBirthdayFilter = v),
                         (v) => v == null ? 'All' : (v == 'yes' ? 'Yes' : 'No')),
-                    _dropdown<String>('Generation', _generationFilter, generationOptions,
-                        (v) => setState(() => _generationFilter = v), (v) => v ?? 'All'),
+                    _multiSelectDropdown(
+                      'Generation',
+                      _generationFilter,
+                      generationOptions,
+                      (v) => setState(() => _generationFilter = v),
+                    ),
                     SizedBox(
                       width: 90,
                       child: TextField(
@@ -451,6 +455,80 @@ class _BrowseScreenState extends State<BrowseScreen> {
               )),
         ],
         onChanged: onChanged,
+      ),
+    );
+  }
+
+  /// Same visual footprint as [_dropdown], but opens a checkbox dialog
+  /// instead of a single-select menu — used for filters like Generation
+  /// where narrowing to more than one value at once is a real use case.
+  Widget _multiSelectDropdown(
+    String label,
+    Set<String> selected,
+    List<String> options,
+    void Function(Set<String>) onChanged,
+  ) {
+    final summary = selected.isEmpty
+        ? 'All'
+        : selected.length == 1
+            ? selected.first
+            : '${selected.length} selected';
+    return SizedBox(
+      width: 160,
+      child: InkWell(
+        onTap: () async {
+          final result = await _showMultiSelectDialog(label, selected, options);
+          if (result != null) onChanged(result);
+        },
+        child: InputDecorator(
+          decoration: InputDecoration(labelText: label, isDense: true),
+          child: Text(summary, overflow: TextOverflow.ellipsis),
+        ),
+      ),
+    );
+  }
+
+  Future<Set<String>?> _showMultiSelectDialog(String label, Set<String> initial, List<String> options) {
+    final selected = Set<String>.from(initial);
+    return showDialog<Set<String>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Filter by $label'),
+          content: SizedBox(
+            width: 300,
+            child: options.isEmpty
+                ? const Text('No options available')
+                : SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final o in options)
+                          CheckboxListTile(
+                            dense: true,
+                            value: selected.contains(o),
+                            title: Text(o),
+                            onChanged: (v) => setDialogState(() {
+                              if (v ?? false) {
+                                selected.add(o);
+                              } else {
+                                selected.remove(o);
+                              }
+                            }),
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => setDialogState(selected.clear),
+              child: const Text('Clear'),
+            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(context, selected), child: const Text('Done')),
+          ],
+        ),
       ),
     );
   }
