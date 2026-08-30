@@ -174,75 +174,113 @@ class _DayCell extends StatelessWidget {
   final List<Person> people;
   final void Function(Person) onTapPerson;
 
+  /// The whole day (not each name) is the tap target: no birthdays means
+  /// nothing to click, exactly one jumps straight to that profile, and more
+  /// than one opens a picker so the names are easier to read/tap than the
+  /// cramped chips squeezed into a day cell.
+  void _handleTap(BuildContext context) {
+    if (people.isEmpty) return;
+    if (people.length == 1) {
+      onTapPerson(people.single);
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text('Birthdays on the $day${_ordinalSuffix(day!)}'),
+        children: [
+          for (final p in people)
+            SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(context);
+                onTapPerson(p);
+              },
+              child: Text(p.name ?? '(no name)'),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).dividerColor, width: 0.5),
-        color: isToday ? scheme.primaryContainer.withValues(alpha: 0.3) : null,
-      ),
-      padding: const EdgeInsets.all(4),
-      child: day == null
-          ? const SizedBox.shrink()
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$day',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontWeight: isToday ? FontWeight.bold : null,
-                        color: isToday ? scheme.primary : null,
-                      ),
-                ),
-                if (people.isNotEmpty)
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Wrap(
-                        spacing: 2,
-                        runSpacing: 2,
-                        children: people
-                            .map((p) => _BirthdayChip(person: p, onTap: () => onTapPerson(p)))
-                            .toList(),
-                      ),
-                    ),
+    if (day == null) return const SizedBox.shrink();
+
+    return InkWell(
+      onTap: people.isEmpty ? null : () => _handleTap(context),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Theme.of(context).dividerColor, width: 0.5),
+          color: isToday ? scheme.primaryContainer.withValues(alpha: 0.3) : null,
+        ),
+        padding: const EdgeInsets.all(4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$day',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: isToday ? FontWeight.bold : null,
+                    color: isToday ? scheme.primary : null,
                   ),
-              ],
             ),
+            if (people.isNotEmpty)
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 2,
+                    runSpacing: 2,
+                    children: people.map((p) => _BirthdayChip(person: p)).toList(),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
 
+String _ordinalSuffix(int day) {
+  if (day % 100 >= 11 && day % 100 <= 13) return 'th';
+  switch (day % 10) {
+    case 1:
+      return 'st';
+    case 2:
+      return 'nd';
+    case 3:
+      return 'rd';
+    default:
+      return 'th';
+  }
+}
+
+/// Purely a visual label now — the day cell (not the individual name) is the
+/// tap target, so this no longer needs its own gesture handling.
 class _BirthdayChip extends StatelessWidget {
-  const _BirthdayChip({required this.person, required this.onTap});
+  const _BirthdayChip({required this.person});
   final Person person;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final deceased = person.deathDate != null;
-    return GestureDetector(
-      onTap: onTap,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 110),
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-          decoration: BoxDecoration(
-            color: deceased ? scheme.surfaceContainerHighest : scheme.primaryContainer,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            person.name ?? '?',
-            style: TextStyle(
-              fontSize: 10,
-              color: deceased ? scheme.onSurfaceVariant : scheme.onPrimaryContainer,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 110),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: deceased ? scheme.surfaceContainerHighest : scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        person.name ?? '?',
+        style: TextStyle(
+          fontSize: 10,
+          color: deceased ? scheme.onSurfaceVariant : scheme.onPrimaryContainer,
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
