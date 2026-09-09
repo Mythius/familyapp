@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:go_router/go_router.dart';
@@ -606,6 +606,25 @@ class _FieldTile extends StatelessWidget {
     );
   }
 
+  // The PWA is still a web build (kIsWeb is true whether it's opened in a
+  // desktop browser tab or installed to a phone's home screen), so kIsWeb
+  // alone can't tell a mouse-driven session from a touch one. Flutter web
+  // parses the browser's user agent into defaultTargetPlatform, which reads
+  // as iOS/android for mobile browsers and the PWA, and macOS/windows/linux
+  // for an actual desktop browser -- use that instead to pick real desktop
+  // mouse users, who get native text selection, from everyone else, who keep
+  // the long-press-to-copy shortcut.
+  bool get _isDesktopMouseInput {
+    if (!kIsWeb) return false;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+        return false;
+      default:
+        return true;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -628,7 +647,7 @@ class _FieldTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: kIsWeb
+                child: _isDesktopMouseInput
                     ? SelectableText(
                         hasValue ? value : '—',
                         style: TextStyle(
@@ -660,11 +679,12 @@ class _FieldTile extends StatelessWidget {
     );
 
     // Long-press copies the whole value straight to the clipboard — handy on
-    // touch, where selecting-then-copying is fiddly. On web this GestureDetector
-    // would sit on top of the SelectableText above and win the gesture arena
-    // for press-and-hold, blocking the mouse click-drag selection browser users
-    // expect — so on web we skip it and rely on native text selection instead.
-    if (!hasValue || kIsWeb) return tile;
+    // touch, where selecting-then-copying is fiddly. On desktop this
+    // GestureDetector would sit on top of the SelectableText above and win the
+    // gesture arena for press-and-hold, blocking the mouse click-drag selection
+    // desktop users expect — so there we skip it and rely on native text
+    // selection instead.
+    if (!hasValue || _isDesktopMouseInput) return tile;
     return GestureDetector(onLongPress: () => _copyToClipboard(context), child: tile);
   }
 }
