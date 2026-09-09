@@ -5,6 +5,7 @@ import { handlePrismaError, type PermissionResult } from "./tools/createCRUD.ts"
 import { handleFileUpload } from "./tools/fileUpload.ts";
 import {
   buildPersonData,
+  canDeletePerson,
   canEditFamily,
   getDescendantsWithGenerations,
   getFamilyIds,
@@ -60,7 +61,7 @@ export function privateRoutes(app: Hono): void {
     if (!visibleIds.length) return c.json({ error: "Not found" }, 404);
     const detail = await getPersonDetail(name, visibleIds);
     if (!detail) return c.json({ error: "Not found" }, 404);
-    return c.json(detail);
+    return c.json({ ...detail, can_delete: await canDeletePerson(email, detail.id) });
   });
 
   app.post("/people/:name", async (c) => {
@@ -368,12 +369,17 @@ async function checkCrudPermissions(action: string, c: Context): Promise<Permiss
       if (!body.familyId) return { allowed: false };
       return { allowed: await canEditFamily(email, body.familyId) };
     }
-    if (method === "PUT" || method === "DELETE") {
+    if (method === "PUT") {
       const id = parseIntOrNull(c.req.param("id"));
       if (id === null) return { allowed: false };
       const person = await prisma.person.findUnique({ where: { id } });
       if (!person) return { allowed: false };
       return { allowed: await canEditFamily(email, person.familyId) };
+    }
+    if (method === "DELETE") {
+      const id = parseIntOrNull(c.req.param("id"));
+      if (id === null) return { allowed: false };
+      return { allowed: await canDeletePerson(email, id) };
     }
     return { allowed: false };
   }

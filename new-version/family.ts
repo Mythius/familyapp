@@ -106,7 +106,7 @@ export async function getFamilyIds(email: string): Promise<string[]> {
 // caller has an administrative stake (not just a blood connection), so it's
 // safe to grant visibility into everyone filed under that family_id even if
 // their tree pointers are broken/incomplete.
-async function getExplicitFamilyRoles(email: string): Promise<Record<string, Role>> {
+export async function getExplicitFamilyRoles(email: string): Promise<Record<string, Role>> {
   const families = await prisma.family.findMany();
   const roles: Record<string, Role> = {};
   for (const f of families) {
@@ -145,6 +145,37 @@ export async function getEditableFamilyIds(email: string): Promise<string[]> {
     .map(([fid]) => fid);
 }
 
+// Nothing else in the tree references this person yet -- no parent/spouse of
+// their own, and nobody else's father/mother/spouse pointer names them either.
+// Exactly the "just created this, haven't linked it to anything" state, and
+// the same shape of check getVisiblePeopleIds already uses to make a
+// freshly-created person findable at all.
+export async function isPersonUnlinked(personId: number): Promise<boolean> {
+  const person = await prisma.person.findUnique({ where: { id: personId } });
+  if (!person) return true;
+  if (person.fatherId || person.motherId || person.spouseId) return false;
+  const dependent = await prisma.person.findFirst({
+    where: { OR: [{ fatherId: personId }, { motherId: personId }, { spouseId: personId }] },
+  });
+  return !dependent;
+}
+
+// Deleting is more destructive than editing and much harder to partially
+// undo, so it gets a tighter bar: an editor (implicit or explicit) may only
+// delete a person with no tree connections at all -- exactly the
+// "accidentally created this" case, with nothing else depending on them.
+// Removing someone already linked into the tree requires being the family's
+// owner or an explicit editor grant, not just implicit (blood-derived) access.
+export async function canDeletePerson(email: string, personId: number): Promise<boolean> {
+  const person = await prisma.person.findUnique({ where: { id: personId } });
+  if (!person) return false;
+  if (!(await canEditFamily(email, person.familyId))) return false;
+  if (await isPersonUnlinked(personId)) return true;
+  const explicitRoles = await getExplicitFamilyRoles(email);
+  const role = explicitRoles[person.familyId];
+  return role === "owner" || role === "editor";
+}
+
 // Starting from each family's root ancestors (plus everyone in any family the
 // user owns/has been granted access to), walks down through children/spouses
 // to build the full visible set.
@@ -161,6 +192,26 @@ export async function getVisiblePeopleIds(familyIds: string[], email: string | n
     const explicitFamilyIds = new Set(Object.keys(explicitRoles));
     for (const p of allPeople) {
       if (explicitFamilyIds.has(p.familyId)) visible.add(p.id);
+    }
+
+    // A brand-new person has no father/mother/spouse link yet, so they're
+    // unreachable by the tree walk below, and an implicit (blood-only) editor
+    // doesn't get the explicit-tag rule above either -- meaning whoever just
+    // created them couldn't find them again to link them in. An unlinked
+    // person isn't part of anyone's established tree, so showing them to any
+    // editor of that family_id (implicit or explicit) leaks nothing -- there's
+    // no tree position to protect yet. This stops applying the moment any
+    // relationship is set, since from then on real traversal takes over.
+    const editableFamilyIds = new Set([
+      ...familyIds,
+      ...Object.entries(explicitRoles)
+        .filter(([, role]) => role === "owner" || role === "editor")
+        .map(([fid]) => fid),
+    ]);
+    for (const p of allPeople) {
+      if (editableFamilyIds.has(p.familyId) && !p.fatherId && !p.motherId && !p.spouseId) {
+        visible.add(p.id);
+      }
     }
   }
 

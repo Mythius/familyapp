@@ -197,6 +197,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _delete() async {
+    final name = _person!['name']?.toString() ?? 'this person';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete person?'),
+        content: Text('This permanently deletes $name. This cannot be undone from the app.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.api.delete('/api/person/${_person!['id']}');
+      if (mounted) context.go('/');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
   void _goToPerson(String name) => context.go('/person/${Uri.encodeComponent(name)}');
 
   Set<int> get _selfAndRelatedIds {
@@ -323,6 +351,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             icon: const Icon(Icons.edit),
                             label: const Text('Edit'),
                           ),
+                  if (_person!['can_delete'] == true && !_editing)
+                    IconButton(
+                      tooltip: 'Delete person',
+                      icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+                      onPressed: _delete,
+                    ),
                 ],
               ),
               const SizedBox(height: 16),

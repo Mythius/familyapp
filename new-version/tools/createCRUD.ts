@@ -67,10 +67,14 @@ function stripSystemFields(data: Record<string, unknown>): Record<string, unknow
   return out;
 }
 
-function parseId(param: string): string | null {
-  return param;
-  // const id = parseInt(param);
-  // return isNaN(id) ? null : id;
+// Prisma expects the where-clause value to match the PK column's real type --
+// coerce to a number only when the param round-trips cleanly through one
+// (covers Int-keyed models like this project's), otherwise pass the string
+// through unchanged (covers String/UUID/cuid-keyed models elsewhere).
+function parseId(param: string): string | number | null {
+  if (!param) return null;
+  const n = parseInt(param, 10);
+  return !isNaN(n) && String(n) === param ? n : param;
 }
 
 export function parseSchema(
