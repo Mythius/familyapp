@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:go_router/go_router.dart';
@@ -627,13 +628,21 @@ class _FieldTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  hasValue ? value : '—',
-                  style: TextStyle(
-                    color: hasValue ? scheme.onSurface : scheme.onSurfaceVariant.withValues(alpha: 0.6),
-                    fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,
-                  ),
-                ),
+                child: kIsWeb
+                    ? SelectableText(
+                        hasValue ? value : '—',
+                        style: TextStyle(
+                          color: hasValue ? scheme.onSurface : scheme.onSurfaceVariant.withValues(alpha: 0.6),
+                          fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,
+                        ),
+                      )
+                    : Text(
+                        hasValue ? value : '—',
+                        style: TextStyle(
+                          color: hasValue ? scheme.onSurface : scheme.onSurfaceVariant.withValues(alpha: 0.6),
+                          fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,
+                        ),
+                      ),
               ),
               if (icon != null && hasValue)
                 InkWell(
@@ -650,10 +659,12 @@ class _FieldTile extends StatelessWidget {
       ),
     );
 
-    // Long-press copies the whole value straight to the clipboard — simpler
-    // than text selection for values that are almost always copied whole
-    // (a phone number, an address), and works the same on touch and desktop.
-    if (!hasValue) return tile;
+    // Long-press copies the whole value straight to the clipboard — handy on
+    // touch, where selecting-then-copying is fiddly. On web this GestureDetector
+    // would sit on top of the SelectableText above and win the gesture arena
+    // for press-and-hold, blocking the mouse click-drag selection browser users
+    // expect — so on web we skip it and rely on native text selection instead.
+    if (!hasValue || kIsWeb) return tile;
     return GestureDetector(onLongPress: () => _copyToClipboard(context), child: tile);
   }
 }
