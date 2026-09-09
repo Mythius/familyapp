@@ -75,6 +75,7 @@ export async function getFamilyIds(email: string): Promise<string[]> {
 
   const spouseIds = allPeople.filter((p) => p.spouseId === person.id).map((p) => p.id);
   const allIds = new Set<number>([person.id, ...spouseIds]);
+  if (person.spouseId) allIds.add(person.spouseId);
   const stack = new Set<number>(allIds);
 
   while (stack.size > 0) {
@@ -100,22 +101,31 @@ export async function getFamilyIds(email: string): Promise<string[]> {
   return [...new Set([...rootFamilyIds, ...ownedIds])];
 }
 
+// Owner / explicit editor-viewer grants only, keyed by family_id -- excludes
+// implicit genealogical editor access. This is the set of families where the
+// caller has an administrative stake (not just a blood connection), so it's
+// safe to grant visibility into everyone filed under that family_id even if
+// their tree pointers are broken/incomplete.
+async function getExplicitFamilyRoles(email: string): Promise<Record<string, Role>> {
+  const families = await prisma.family.findMany();
+  const roles: Record<string, Role> = {};
+  for (const f of families) {
+    if (f.owner === email) roles[f.familyId] = "owner";
+  }
+  for (const f of families) {
+    if (roles[f.familyId]) continue;
+    const entries = (f.permissions as unknown as FamilyPermissionEntry[]) ?? [];
+    const grant = entries.find((e) => e.email === email);
+    if (grant) roles[f.familyId] = grant.role;
+  }
+  return roles;
+}
+
 // Merges owner / explicit editor-viewer grants / implicit genealogical editor
 // access into one { family_id: role } map. Owner > explicit grant > implicit editor.
 export async function getFamilyPermissions(email: string): Promise<Record<string, Role>> {
-  const families = await prisma.family.findMany();
   const memberFamilyIds = await getFamilyIds(email);
-  const permissions: Record<string, Role> = {};
-
-  for (const f of families) {
-    if (f.owner === email) permissions[f.familyId] = "owner";
-  }
-  for (const f of families) {
-    if (permissions[f.familyId]) continue;
-    const entries = (f.permissions as unknown as FamilyPermissionEntry[]) ?? [];
-    const grant = entries.find((e) => e.email === email);
-    if (grant) permissions[f.familyId] = grant.role;
-  }
+  const permissions = await getExplicitFamilyRoles(email);
   for (const fid of memberFamilyIds) {
     if (!permissions[fid]) permissions[fid] = "editor";
   }
@@ -144,10 +154,13 @@ export async function getVisiblePeopleIds(familyIds: string[], email: string | n
   const visible = new Set<number>();
 
   if (email) {
-    const permissions = await getFamilyPermissions(email);
-    const accessibleFamilyIds = new Set(Object.keys(permissions));
+    // Only an explicit owner/grant unlocks "everyone tagged with this
+    // family_id" regardless of tree position -- implicit (blood-only) access
+    // must go through the actual root-ancestor walk below, not the tag.
+    const explicitRoles = await getExplicitFamilyRoles(email);
+    const explicitFamilyIds = new Set(Object.keys(explicitRoles));
     for (const p of allPeople) {
-      if (accessibleFamilyIds.has(p.familyId)) visible.add(p.id);
+      if (explicitFamilyIds.has(p.familyId)) visible.add(p.id);
     }
   }
 
