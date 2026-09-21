@@ -74,10 +74,25 @@ jobs:
           # what produced the "divergent branches" failure last time. A
           # deploy box should always become exactly what's on the remote.
           script: |
+            export PATH="$HOME/.bun/bin:$PATH"
             cd /home/matthias/Github/familyapp-new
+            before="$(git rev-parse HEAD)"
             git fetch origin main
             git checkout main
             git reset --hard origin/main
+            after="$(git rev-parse HEAD)"
+
+            cd new-version
+            if ! git diff --quiet "$before" "$after" -- bun.lock; then
+              echo "bun.lock changed - installing dependencies"
+              bun install --frozen-lockfile
+            fi
+            if ! git diff --quiet "$before" "$after" -- prisma/schema.prisma; then
+              echo "prisma schema changed - regenerating client and pushing schema"
+              bunx prisma generate
+              bunx prisma db push --skip-generate
+            fi
+
             sudo systemctl restart familyn.service
 
       - name: Verify deployed version
