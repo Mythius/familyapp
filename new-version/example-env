@@ -1,0 +1,18 @@
+CAS_SERVER_URL="https://cas.msouthwick.com"
+CAS_CLIENT_ID=default
+CAS_CALLBACK_URL="http://localhost/auth/callback/cas"
+
+# Needed for the mobile app's native Google sign-in (web uses CAS instead).
+# Must match the serverClientId in frontend/lib/core/auth_state.dart.
+GOOGLE_CLIENT_ID=1016767921529-6ht5kllaqo7627qcb9p7fv7vilc66aos.apps.googleusercontent.com
+
+PORT="80"
+# Use db:5432/redis:6379 (the docker-compose service names) when running via
+# `docker-compose up`; use localhost when running `bun run index.ts` directly
+# against `docker-compose up -d db redis`.
+DATABASE_URL=postgresql://test:test@db:5432/test_db
+REDIS_URL=redis://redis:6379
+
+# Source DB for the one-time migration script (tools/migrate-from-mysql.ts) —
+# not needed for normal running, only when re-importing from the old MySQL dump.
+MYSQL_MIGRATE_URL=mysql://root:root@localhost:3307/family_db

@@ -294,51 +294,67 @@
           unitPositions.push({ unit, idealX, width: unit.width });
         }
 
-        // Interpolate positions for units without children (unmarried siblings)
-        // They should be positioned between their adjacent siblings
-        for (let i = 0; i < unitPositions.length; i++) {
-          if (unitPositions[i].idealX === null) {
-            // Find nearest positioned siblings on left and right
-            let leftX = null;
-            let rightX = null;
-            let leftIdx = -1;
-            let rightIdx = -1;
+        // Interpolate positions for units without children (unmarried siblings).
+        // Process each contiguous RUN of unpositioned units together (not one
+        // at a time in index order) - otherwise a run of 2+ empty units next
+        // to a single positioned anchor gets crushed: the far one is treated
+        // as if adjacent to the anchor, and the truly-adjacent one is left
+        // with almost no room, skewing the whole generation to one side.
+        let runStart = 0;
+        while (runStart < unitPositions.length) {
+          if (unitPositions[runStart].idealX !== null) {
+            runStart++;
+            continue;
+          }
 
-            for (let j = i - 1; j >= 0; j--) {
-              if (unitPositions[j].idealX !== null) {
-                leftX = unitPositions[j].idealX + unitPositions[j].width;
-                leftIdx = j;
-                break;
-              }
+          let runEnd = runStart;
+          while (runEnd < unitPositions.length && unitPositions[runEnd].idealX === null) {
+            runEnd++;
+          }
+
+          const leftIdx = runStart - 1;
+          const rightIdx = runEnd;
+          const leftX = leftIdx >= 0 ? unitPositions[leftIdx].idealX + unitPositions[leftIdx].width : null;
+          const rightX = rightIdx < unitPositions.length ? unitPositions[rightIdx].idealX : null;
+
+          if (leftX !== null && rightX !== null) {
+            // Distribute the whole run evenly across the gap, respecting each unit's width
+            let totalWidth = 0;
+            for (let k = runStart; k < runEnd; k++) totalWidth += unitPositions[k].width;
+            const count = runEnd - runStart;
+            const spacing = (rightX - leftX - totalWidth) / (count + 1);
+
+            let x = leftX;
+            for (let k = runStart; k < runEnd; k++) {
+              x += spacing;
+              unitPositions[k].idealX = x;
+              x += unitPositions[k].width;
             }
-
-            for (let j = i + 1; j < unitPositions.length; j++) {
-              if (unitPositions[j].idealX !== null) {
-                rightX = unitPositions[j].idealX;
-                rightIdx = j;
-                break;
-              }
+          } else if (leftX !== null) {
+            // Only a left neighbor - stack outward to the right, in order
+            let x = leftX;
+            for (let k = runStart; k < runEnd; k++) {
+              x += HORIZONTAL_SPACING;
+              unitPositions[k].idealX = x;
+              x += unitPositions[k].width;
             }
-
-            // Calculate position based on neighbors
-            if (leftX !== null && rightX !== null) {
-              // Between two positioned siblings - interpolate
-              const gap = rightX - leftX;
-              const unpositionedCount = rightIdx - leftIdx - 1;
-              const posInGap = i - leftIdx;
-              const spacing = gap / (unpositionedCount + 1);
-              unitPositions[i].idealX = leftX + spacing * posInGap;
-            } else if (leftX !== null) {
-              // Only left neighbor - place to the right
-              unitPositions[i].idealX = leftX + HORIZONTAL_SPACING;
-            } else if (rightX !== null) {
-              // Only right neighbor - place to the left
-              unitPositions[i].idealX = rightX - unitPositions[i].width - HORIZONTAL_SPACING;
-            } else {
-              // No neighbors positioned - start at 0
-              unitPositions[i].idealX = 0;
+          } else if (rightX !== null) {
+            // Only a right neighbor - stack outward to the left, nearest first
+            let x = rightX;
+            for (let k = runEnd - 1; k >= runStart; k--) {
+              x -= HORIZONTAL_SPACING + unitPositions[k].width;
+              unitPositions[k].idealX = x;
+            }
+          } else {
+            // No neighbors positioned at all - lay out left to right from 0
+            let x = 0;
+            for (let k = runStart; k < runEnd; k++) {
+              unitPositions[k].idealX = x;
+              x += unitPositions[k].width + HORIZONTAL_SPACING;
             }
           }
+
+          runStart = runEnd;
         }
 
         // Now place units in ORDER (preserving Pass 1 order), adjusting for overlaps
