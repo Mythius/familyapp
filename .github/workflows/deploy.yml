@@ -98,14 +98,17 @@ jobs:
             after="$(git rev-parse HEAD)"
 
             cd new-version
-            if ! git diff --quiet "$before" "$after" -- bun.lock; then
-              echo "bun.lock changed - installing dependencies"
+            if ! git diff --quiet "$before" "$after" -- bun.lock prisma/schema.prisma; then
+              echo "bun.lock or schema changed - installing dependencies"
               bun install --frozen-lockfile
             fi
             if ! git diff --quiet "$before" "$after" -- prisma/schema.prisma; then
               echo "prisma schema changed - regenerating client and pushing schema"
-              bunx prisma generate
-              bunx prisma db push --skip-generate
+              # Run the exact version bun.lock installed, not `bunx prisma`,
+              # which resolves against the npm registry and can silently
+              # grab an incompatible newer major with a different CLI.
+              ./node_modules/.bin/prisma generate
+              ./node_modules/.bin/prisma db push --skip-generate
             fi
 
             sudo systemctl restart familyn.service
