@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { expose } from "./tools/listEndpoints.ts";
+import { exposeVersion } from "./tools/version.ts";
 import {
   setupPublicRoutes as authPublic,
   setupMiddleware as authMiddleware,
@@ -15,6 +16,7 @@ expose(app);
 
 app.use("/*", serveStatic({ root: "./public" }));
 app.get("/health", (c) => c.json({ status: "ok" }));
+exposeVersion(app);
 
 setOnLoginCallback(API.onLogin);
 setSessionStore("memory"); 
