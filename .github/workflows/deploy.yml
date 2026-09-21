@@ -94,8 +94,11 @@ jobs:
             cd /home/matthias/Github/familyapp-new/familyapp
             before="$(git rev-parse HEAD)"
             git fetch origin main
-            git checkout main
-            git reset --hard origin/main
+            # -B (re)creates local main pointing at origin/main; -f discards
+            # any dirty tracked files instead of refusing like a plain
+            # `checkout` would (hit this for real: someone had hand-edited
+            # server.sh directly on the box without committing it).
+            git checkout -f -B main origin/main
             after="$(git rev-parse HEAD)"
 
             cd new-version
