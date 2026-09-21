@@ -68,7 +68,17 @@ jobs:
           host: msouthwick.com
           username: matthias
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: bash /home/matthias/Github/familyapp-new/new-version/update.sh
+          # Inline rather than a checked-in script: a script file on disk
+          # can't deploy itself the first time it exists. `git pull` is
+          # deliberately not used here - that's a merge, and it's exactly
+          # what produced the "divergent branches" failure last time. A
+          # deploy box should always become exactly what's on the remote.
+          script: |
+            cd /home/matthias/Github/familyapp-new
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            sudo systemctl restart familyn.service
 
       - name: Verify deployed version
         run: |
