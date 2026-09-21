@@ -51,7 +51,22 @@ jobs:
           if ! git diff --quiet -- new-version/public; then
             git add new-version/public
             git commit -m "chore: rebuild flutter web bundle [skip ci]"
-            git push origin HEAD:main
+            # A concurrent push to main (e.g. someone pushing a follow-up
+            # commit while this job is running) rejects a plain push here -
+            # rebase onto the latest main and retry rather than failing the
+            # whole job over an ordinary race.
+            for i in 1 2 3 4 5; do
+              if git push origin HEAD:main; then
+                break
+              fi
+              echo "Push rejected (attempt $i/5) - rebasing onto latest origin/main and retrying"
+              git fetch origin main
+              git rebase origin/main
+              if [ "$i" = 5 ]; then
+                echo "::error::Could not push rebuilt bundle after 5 attempts"
+                exit 1
+              fi
+            done
           fi
 
       - name: Resolve deployed sha
