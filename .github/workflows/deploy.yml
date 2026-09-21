@@ -100,6 +100,7 @@ jobs:
             # server.sh directly on the box without committing it).
             git checkout -f -B main origin/main
             after="$(git rev-parse HEAD)"
+            git rev-parse --short HEAD > new-version/.deploy-sha
 
             cd new-version
             if ! git diff --quiet "$before" "$after" -- bun.lock prisma/schema.prisma; then
