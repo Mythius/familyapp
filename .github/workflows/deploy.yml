@@ -89,8 +89,9 @@ jobs:
           # what produced the "divergent branches" failure last time. A
           # deploy box should always become exactly what's on the remote.
           script: |
+            set -e
             export PATH="$HOME/.bun/bin:$PATH"
-            cd /home/matthias/Github/familyapp-new
+            cd /home/matthias/Github/familyapp-new/familyapp
             before="$(git rev-parse HEAD)"
             git fetch origin main
             git checkout main
