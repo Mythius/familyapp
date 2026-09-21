@@ -4,11 +4,63 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "new-version/**"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
 
+permissions:
+  contents: write
+
+jobs:
+  # Flutter compiles to a prebuilt web bundle committed at new-version/public/
+  # rather than being built on the server - so a source-only change under
+  # frontend/ has zero effect until something rebuilds and recommits that
+  # bundle. This job does that automatically on every push, instead of
+  # relying on a human remembering to run build-frontend.sh first.
+  rebuild-frontend:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve-sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build Flutter web
+        working-directory: new-version/frontend
+        run: |
+          flutter pub get
+          flutter build web
+
+      - name: Sync build output into public/
+        working-directory: new-version
+        run: |
+          rm -rf public/*
+          cp -r frontend/build/web/* public/
+
+      - name: Commit rebuilt bundle if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- new-version/public; then
+            git add new-version/public
+            git commit -m "chore: rebuild flutter web bundle [skip ci]"
+            git push origin HEAD:main
+          fi
+
+      - name: Resolve deployed sha
+        id: resolve-sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: rebuild-frontend
+    runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -16,4 +68,19 @@ jobs:
           host: msouthwick.com
           username: matthias
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: source ~/.nvm/nvm.sh && bash /home/matthias/Github/familyapp/update.sh
+          script: bash /home/matthias/Github/familyapp-new/new-version/update.sh
+
+      - name: Verify deployed version
+        run: |
+          expected="$(echo '${{ needs.rebuild-frontend.outputs.sha }}' | cut -c1-7)"
+          for i in $(seq 1 10); do
+            resp="$(curl -fsS https://familyn.msouthwick.com/version || true)"
+            echo "Got: $resp"
+            if echo "$resp" | grep -q "$expected"; then
+              echo "Deploy verified: $resp"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::familyn.msouthwick.com/version never reported commit $expected after deploy"
+          exit 1
