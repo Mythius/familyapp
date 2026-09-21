@@ -203,42 +203,70 @@ Map<int, NodePosition> buildTreeLayout(List<TreeNode> people) {
     }
 
     // Interpolate positions for units with no positioned children (unmarried
-    // siblings) — place them between whichever neighboring siblings do have one.
-    for (var i = 0; i < unitPositions.length; i++) {
-      if (unitPositions[i].idealX != null) continue;
+    // siblings). Process each contiguous RUN of unpositioned units together
+    // (not one at a time in index order) — otherwise a run of 2+ empty units
+    // next to a single positioned anchor gets crushed: the far one is treated
+    // as if adjacent to the anchor, and the truly-adjacent one is left with
+    // almost no room, skewing the whole generation to one side.
+    var runStart = 0;
+    while (runStart < unitPositions.length) {
+      if (unitPositions[runStart].idealX != null) {
+        runStart++;
+        continue;
+      }
 
-      double? leftX;
-      double? rightX;
-      var leftIdx = -1;
-      var rightIdx = -1;
-      for (var j = i - 1; j >= 0; j--) {
-        if (unitPositions[j].idealX != null) {
-          leftX = unitPositions[j].idealX! + unitPositions[j].unit.width;
-          leftIdx = j;
-          break;
-        }
+      var runEnd = runStart;
+      while (runEnd < unitPositions.length && unitPositions[runEnd].idealX == null) {
+        runEnd++;
       }
-      for (var j = i + 1; j < unitPositions.length; j++) {
-        if (unitPositions[j].idealX != null) {
-          rightX = unitPositions[j].idealX;
-          rightIdx = j;
-          break;
-        }
-      }
+
+      final leftIdx = runStart - 1;
+      final rightIdx = runEnd;
+      final leftX = leftIdx >= 0
+          ? unitPositions[leftIdx].idealX! + unitPositions[leftIdx].unit.width
+          : null;
+      final rightX = rightIdx < unitPositions.length ? unitPositions[rightIdx].idealX : null;
 
       if (leftX != null && rightX != null) {
-        final gap = rightX - leftX;
-        final unpositionedCount = rightIdx - leftIdx - 1;
-        final posInGap = i - leftIdx;
-        final spacing = gap / (unpositionedCount + 1);
-        unitPositions[i].idealX = leftX + spacing * posInGap;
+        // Distribute the whole run evenly across the gap, respecting each unit's width.
+        var totalWidth = 0.0;
+        for (var k = runStart; k < runEnd; k++) {
+          totalWidth += unitPositions[k].unit.width;
+        }
+        final count = runEnd - runStart;
+        final spacing = (rightX - leftX - totalWidth) / (count + 1);
+
+        var x = leftX;
+        for (var k = runStart; k < runEnd; k++) {
+          x += spacing;
+          unitPositions[k].idealX = x;
+          x += unitPositions[k].unit.width;
+        }
       } else if (leftX != null) {
-        unitPositions[i].idealX = leftX + kHorizontalSpacing;
+        // Only a left neighbor - stack outward to the right, in order.
+        var x = leftX;
+        for (var k = runStart; k < runEnd; k++) {
+          x += kHorizontalSpacing;
+          unitPositions[k].idealX = x;
+          x += unitPositions[k].unit.width;
+        }
       } else if (rightX != null) {
-        unitPositions[i].idealX = rightX - unitPositions[i].unit.width - kHorizontalSpacing;
+        // Only a right neighbor - stack outward to the left, nearest first.
+        var x = rightX;
+        for (var k = runEnd - 1; k >= runStart; k--) {
+          x -= kHorizontalSpacing + unitPositions[k].unit.width;
+          unitPositions[k].idealX = x;
+        }
       } else {
-        unitPositions[i].idealX = 0;
+        // No neighbors positioned at all - lay out left to right from 0.
+        var x = 0.0;
+        for (var k = runStart; k < runEnd; k++) {
+          unitPositions[k].idealX = x;
+          x += unitPositions[k].unit.width + kHorizontalSpacing;
+        }
       }
+
+      runStart = runEnd;
     }
 
     final placedUnits = <_PlacedUnit>[];
