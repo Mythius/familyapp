@@ -279,6 +279,24 @@ export function setupPublicRoutes(app: Hono): void {
     return c.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   });
 
+  // Email sign-in exists only on the CAS server — there's no local fallback.
+  app.get("/auth/email", (c) => {
+    if (!CAS_SERVER_URL || !CAS_CLIENT_ID) {
+      return c.json(
+        {
+          error: "Email login not configured",
+          hint: "Set CAS_SERVER_URL and CAS_CLIENT_ID in your .env file.",
+        },
+        503,
+      );
+    }
+    const params = new URLSearchParams({
+      client_id: CAS_CLIENT_ID,
+      redirect_uri: CAS_CALLBACK_URL,
+    });
+    return c.redirect(`${CAS_SERVER_URL}/auth/email?${params}`);
+  });
+
   app.get("/auth/callback/google", async (c) => {
     const missing = checkGoogleOAuthEnvVars();
     if (missing.length > 0) {
