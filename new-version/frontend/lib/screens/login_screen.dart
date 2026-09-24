@@ -25,8 +25,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _signingIn = false;
 
-  Future<void> _signInWeb() async {
-    final uri = Uri.parse('${widget.api.baseUrl}/auth/google');
+  Future<void> _signInWeb(String provider) async {
+    final uri = Uri.parse('${widget.api.baseUrl}/auth/$provider');
     await launchUrl(uri, webOnlyWindowName: '_self');
   }
 
@@ -59,7 +59,9 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
-              onPressed: _signingIn ? null : (kIsWeb ? _signInWeb : _signInMobile),
+              onPressed: _signingIn
+                  ? null
+                  : (kIsWeb ? () => _signInWeb('google') : _signInMobile),
               icon: _signingIn
                   ? const SizedBox(
                       width: 16,
@@ -67,8 +69,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.login),
-              label: Text(kIsWeb ? 'Sign in' : 'Sign in with Google'),
+              label: const Text('Sign in with Google'),
             ),
+            // Email sign-in goes through CAS, whose cookie-based session has
+            // no equivalent on mobile — so it's web-only.
+            if (kIsWeb) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => _signInWeb('email'),
+                icon: const Icon(Icons.email_outlined),
+                label: const Text('Sign in with email'),
+              ),
+            ],
           ],
         ),
       ),
