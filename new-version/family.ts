@@ -56,6 +56,11 @@ export function buildPersonData(body: Record<string, unknown>): Record<string, u
       data[prismaKey] = typeof value === "string" ? value.trim() : value;
     }
   }
+  if (typeof data.gender === "string") {
+    const g = data.gender.toLowerCase();
+    if (g === "f" || g === "female") data.gender = "Female";
+    else if (g === "m" || g === "male") data.gender = "Male";
+  }
   return data;
 }
 

@@ -102,10 +102,20 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_error != null) return Center(child: Text(_error!));
     if (_people == null) return const Center(child: CircularProgressIndicator());
 
-    final filtered = _query.isEmpty
+    final q = _query.trim().toLowerCase();
+    // Phone numbers are stored in whatever format they were typed, so compare
+    // digits only — "555-1234" should find "(555) 123-4567".
+    final qDigits = q.replaceAll(RegExp(r'\D'), '');
+    bool nameMatches(Person p) => (p.name ?? '').toLowerCase().contains(q);
+    bool emailMatches(Person p) => (p.email ?? '').toLowerCase().contains(q);
+    bool phoneMatches(Person p) =>
+        qDigits.isNotEmpty &&
+        (p.phone ?? '').replaceAll(RegExp(r'\D'), '').contains(qDigits);
+
+    final filtered = q.isEmpty
         ? _people!
         : _people!
-            .where((p) => (p.name ?? '').toLowerCase().contains(_query.toLowerCase()))
+            .where((p) => nameMatches(p) || emailMatches(p) || phoneMatches(p))
             .toList();
 
     return Scaffold(
@@ -121,7 +131,7 @@ class _SearchScreenState extends State<SearchScreen> {
             child: TextField(
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'Search people…',
+                hintText: 'Search by name, phone, or email…',
                 border: OutlineInputBorder(),
               ),
               onChanged: (v) => setState(() => _query = v),
@@ -137,8 +147,16 @@ class _SearchScreenState extends State<SearchScreen> {
                       separatorBuilder: (context, index) => const Divider(height: 1),
                       itemBuilder: (context, i) {
                         final p = filtered[i];
+                        // When the hit came from contact info rather than the
+                        // name, show it so it's clear why this person matched.
+                        final String? matchedOn = q.isEmpty || nameMatches(p)
+                            ? null
+                            : emailMatches(p)
+                                ? p.email
+                                : p.phone;
                         return ListTile(
                           title: Text(p.name ?? '(no name)'),
+                          subtitle: matchedOn != null ? Text(matchedOn) : null,
                           trailing: widget.auth.canEdit(p.familyId)
                               ? const Icon(Icons.edit, size: 16)
                               : null,
@@ -165,7 +183,7 @@ class _EmptyResults extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('No one named "$query" yet.', style: Theme.of(context).textTheme.bodyLarge),
+          Text('No one matches "$query" yet.', style: Theme.of(context).textTheme.bodyLarge),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: onCreate,
