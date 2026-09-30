@@ -118,6 +118,8 @@ jobs:
 
             sudo systemctl restart familyn.service
 
+            /home/matthias/Github/gchat/discord.py "Deployed FamilyApp to server successfully"
+
       - name: Verify deployed version
         run: |
           expected="$(echo '${{ needs.rebuild-frontend.outputs.sha }}' | cut -c1-7)"
